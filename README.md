@@ -1,2 +1,2 @@
-# Popcorn extension v24.6.0
+# Popcorn 
 This is a development build that runs  without Tampermonkey.
