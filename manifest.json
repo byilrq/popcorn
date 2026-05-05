@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "Popcorn",
-  "version": "0.58.0",
-  "description": "Popcorn standalone browser extension (v58.0, BTN Douban title score)",
+  "version": "0.61.0",
+  "description": "Popcorn standalone browser extension (v62.0, BTN first-season IMDb field fix)",
   "icons": {
     "16": "images/icon16.png",
     "32": "images/icon32.png",

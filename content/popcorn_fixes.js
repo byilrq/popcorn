@@ -1,8 +1,8 @@
 // Popcorn extension site-specific fixes loaded after the original userscript.
 // Keeps the upstream userscript mostly intact while patching browser-extension compatibility gaps.
 (() => {
-  if (window.__POPCORN_FIXES_V35__) return;
-  window.__POPCORN_FIXES_V35__ = true;
+  if (window.__POPCORN_FIXES_V36__) return;
+  window.__POPCORN_FIXES_V36__ = true;
 
   const $ = window.jQuery || window.$;
   const DOUBAN_PREFIX = 'https://movie.douban.com/subject/';
@@ -507,6 +507,65 @@
     return /第[一二三四五六七八九十0-9]+季|Season\s*\d+|\bS\d{1,2}(?:E\d{1,2})?\b|Episode\s*\d+|剧集|电视剧|迷你剧|限定剧/i.test(t);
   }
 
+
+  function chineseSeasonNumber(raw) {
+    const s = text(raw);
+    const digit = s.match(/[0-9]+/);
+    if (digit) return Number(digit[0]);
+    const map = { '一':1, '二':2, '三':3, '四':4, '五':5, '六':6, '七':7, '八':8, '九':9, '十':10 };
+    if (s === '十') return 10;
+    if (s.startsWith('十')) return 10 + (map[s.slice(1)] || 0);
+    if (s.includes('十')) {
+      const parts = s.split('十');
+      return (map[parts[0]] || 1) * 10 + (map[parts[1]] || 0);
+    }
+    return map[s] || 0;
+  }
+
+  function explicitSeasonNumber(raw) {
+    const t = text(raw);
+    let m = t.match(/第\s*([0-9]+)\s*季/i);
+    if (m) return Number(m[1]);
+    m = t.match(/第\s*([一二三四五六七八九十]+)\s*季/i);
+    if (m) return chineseSeasonNumber(m[1]);
+    m = t.match(/\bSeason\s*0*([0-9]+)\b/i);
+    if (m) return Number(m[1]);
+    m = t.match(/\bS0*([0-9]{1,2})(?:E\d{1,3})?\b/i);
+    if (m) return Number(m[1]);
+    return 0;
+  }
+
+  function isFirstSeasonSeriesTitle(raw) {
+    const n = explicitSeasonNumber(raw);
+    if (n === 1) return true;
+    return /第一季|第\s*1\s*季|\bSeason\s*0?1\b|\bS0?1(?:E\d{1,3})?\b/i.test(text(raw));
+  }
+
+  function shouldNormalizeSeriesImdb(raw) {
+    const n = explicitSeasonNumber(raw);
+    // Only non-first seasons need IMDb normalization. First season must keep
+    // Douban's own default IMDb ID; otherwise first-season searches can be
+    // redirected to the wrong series-level IMDb title.
+    return n > 1 && !isFirstSeasonSeriesTitle(raw);
+  }
+
+  function shouldRunSeriesSearchFlow(raw) {
+    // The global decision layer deliberately separates two concepts:
+    // 1) whether this title should enter the series-search handling pipeline;
+    // 2) whether the IMDb ID should be replaced by a series/first-season ID.
+    // First-season titles still need the pipeline because some targets (BTN, etc.)
+    // require us to fill/submit an IMDb field, but they must use Douban's own IMDb.
+    return looksLikeSeriesTitle(raw);
+  }
+
+  async function getSeriesSearchImdb(originalImdb, titleHint) {
+    const original = (text(originalImdb).match(/tt\d{6,10}/i) || [''])[0] || '';
+    if (!original) return '';
+    if (!shouldRunSeriesSearchFlow(titleHint)) return original;
+    if (!shouldNormalizeSeriesImdb(titleHint)) return original;
+    return await resolveBtnSeriesImdbId(original, titleHint).catch(() => original) || original;
+  }
+
   async function imdbSuggestSeriesId(titleHint) {
     const q = cleanSeriesTitleHint(titleHint);
     if (!q) return '';
@@ -525,6 +584,7 @@
   async function resolveBtnSeriesImdbId(imdb, titleHint) {
     imdb = (text(imdb).match(/tt\d{6,10}/i) || [])[0] || '';
     if (!imdb) return '';
+    if (!shouldNormalizeSeriesImdb(titleHint)) return imdb;
     try {
       const cacheKey = 'popcorn_btn_series_imdb_' + imdb + '_' + cleanSeriesTitleHint(titleHint).toLowerCase();
       const cached = sessionStorage.getItem(cacheKey);
@@ -728,7 +788,7 @@
   async function rewriteDoubanSelectedSeriesLinks() {
     if (!location.href.match(/^https?:\/\/movie\.douban\.com\/subject\//i)) return;
     const titleHint = getDoubanPageTitleHint();
-    if (!looksLikeSeriesTitle(titleHint)) return;
+    if (!shouldRunSeriesSearchFlow(titleHint)) return;
     const subjectId = subjectIdFromText(location.href);
     const originalImdb = getDoubanPageImdbId();
     if (!originalImdb) return;
@@ -747,7 +807,7 @@
     let resolved = '';
     try { resolved = sessionStorage.getItem(cacheKey) || localStorage.getItem(cacheKey) || ''; } catch (_) {}
     if (!resolved) {
-      resolved = await resolveBtnSeriesImdbId(originalImdb, titleHint).catch(() => originalImdb) || originalImdb;
+      resolved = await getSeriesSearchImdb(originalImdb, titleHint) || originalImdb;
       if (resolved && resolved.toLowerCase() !== originalImdb.toLowerCase()) {
         try { sessionStorage.setItem(cacheKey, resolved); localStorage.setItem(cacheKey, resolved); } catch (_) {}
         popcornSeriesSet(originalImdb, resolved, subjectId, titleHint);
@@ -763,12 +823,12 @@
     const titleHint = getDoubanPageTitleHint();
     const subjectId = subjectIdFromText(location.href);
     const originalImdb = getDoubanPageImdbId();
-    if (!originalImdb || !looksLikeSeriesTitle(titleHint)) return;
+    if (!originalImdb || !shouldRunSeriesSearchFlow(titleHint)) return;
     const cacheKey = 'popcorn_global_series_imdb_' + subjectId + '_' + originalImdb + '_' + cleanSeriesTitleHint(titleHint).toLowerCase();
     let resolved = '';
     try { resolved = sessionStorage.getItem(cacheKey) || localStorage.getItem(cacheKey) || ''; } catch (_) {}
     if (!resolved) {
-      resolved = await resolveBtnSeriesImdbId(originalImdb, titleHint).catch(() => originalImdb) || originalImdb;
+      resolved = await getSeriesSearchImdb(originalImdb, titleHint) || originalImdb;
       try { sessionStorage.setItem(cacheKey, resolved); localStorage.setItem(cacheKey, resolved); } catch (_) {}
     }
     if (!resolved) return;
@@ -870,14 +930,10 @@
         if (refInfo && refInfo.title) titleHint = refInfo.title;
       } catch (_) {}
     }
-    if (!looksLikeSeriesTitle(titleHint)) {
-      const stored = popcornSeriesGet(originalImdb);
-      if (stored && stored.resolved) { popcornRedirectCleanSearch('BHD', stored.resolved); return; }
-      return;
-    }
+    if (!shouldRunSeriesSearchFlow(titleHint)) return;
     const cacheKey = 'popcorn_bhd_series_imdb_fixed_' + originalImdb + '_' + cleanSeriesTitleHint(titleHint).toLowerCase();
     if (sessionStorage.getItem(cacheKey)) return;
-    const resolved = await resolveBtnSeriesImdbId(originalImdb, titleHint).catch(() => originalImdb);
+    const resolved = await getSeriesSearchImdb(originalImdb, titleHint);
     if (!resolved || resolved.toLowerCase() === originalImdb.toLowerCase()) return;
     sessionStorage.setItem(cacheKey, resolved);
     popcornSeriesSet(originalImdb, resolved, '', titleHint);
@@ -925,11 +981,10 @@
       } catch (_) {}
     }
     if (!originalImdb || sessionStorage.getItem('popcorn_btn_imdb_fixed_' + originalImdb + '_' + cleanSeriesTitleHint(titleHint))) return;
-    if (!looksLikeSeriesTitle(titleHint)) {
-      const stored = popcornSeriesGet(originalImdb);
-      if (stored && stored.resolved) { popcornRedirectCleanSearch('BTN', stored.resolved); return; }
-    }
-    const imdb = await resolveBtnSeriesImdbId(originalImdb, titleHint);
+
+    // Use the global series IMDb decision layer. First seasons keep Douban's IMDb
+    // but still continue through BTN's field-fill and submit pipeline.
+    const imdb = await getSeriesSearchImdb(originalImdb, titleHint) || originalImdb;
     popcornSeriesSet(originalImdb, imdb, '', titleHint);
 
     // If a quick-search link lands on BTN basic search, redirect to the advanced form first.
@@ -994,14 +1049,10 @@
     if (!titleHint && /movie\.douban\.com\/subject\//.test(document.referrer || '')) {
       try { const refInfo = await doubanBySubjectId(subjectIdFromText(document.referrer)); if (refInfo && refInfo.title) titleHint = refInfo.title; } catch (_) {}
     }
-    if (!looksLikeSeriesTitle(titleHint)) {
-      const stored = popcornSeriesGet(originalImdb);
-      if (stored && stored.resolved) { popcornRedirectCleanSearch(key, stored.resolved); return; }
-      return;
-    }
+    if (!shouldRunSeriesSearchFlow(titleHint)) return;
     const cacheKey = 'popcorn_' + key.toLowerCase() + '_series_imdb_fixed_' + originalImdb + '_' + cleanSeriesTitleHint(titleHint).toLowerCase();
     if (sessionStorage.getItem(cacheKey)) return;
-    const resolved = await resolveBtnSeriesImdbId(originalImdb, titleHint).catch(() => originalImdb);
+    const resolved = await getSeriesSearchImdb(originalImdb, titleHint);
     if (!resolved || resolved.toLowerCase() === originalImdb.toLowerCase()) return;
     sessionStorage.setItem(cacheKey, resolved);
     popcornSeriesSet(originalImdb, resolved, '', titleHint);
