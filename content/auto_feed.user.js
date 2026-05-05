@@ -5001,6 +5001,187 @@ if (site_url.match(/(broadcasthe.net|backup.landof.tv)\/.*.php.*/)) {
     });
 }
 
+
+
+// Popcorn extension: add Douban Chinese title and first-season rating on BTN search / title result pages.
+// Keep this isolated from quick search, site library and forwarding logic.
+// BTN may redirect from an IMDb search URL to a series/torrent id URL that no longer contains IMDb.
+// Cache the search IMDb before/while leaving the search page, then reuse it on the id page.
+function auto_feed_btn_cache_key_for_href(href) {
+    try {
+        var u = new URL(href, location.href);
+        if (!u.hostname.match(/^(broadcasthe\.net|backup\.landof\.tv)$/i)) return '';
+        var id = u.searchParams.get('id') || '';
+        if (!id) return '';
+        if (!u.pathname.match(/\/(series|torrents)\.php$/i)) return '';
+        return u.hostname + '|' + u.pathname + '?id=' + id;
+    } catch(e) { return ''; }
+}
+function auto_feed_btn_read_imdb_cache() {
+    try { return JSON.parse(GM_getValue('auto_feed_btn_imdb_cache') || '{}') || {}; } catch(e) { return {}; }
+}
+function auto_feed_btn_write_imdb_cache(cache) {
+    try {
+        var now = Date.now();
+        Object.keys(cache || {}).forEach(function(k){
+            if (!cache[k] || !cache[k].ts || now - cache[k].ts > 30 * 24 * 60 * 60 * 1000) delete cache[k];
+        });
+        GM_setValue('auto_feed_btn_imdb_cache', JSON.stringify(cache || {}));
+    } catch(e) {}
+}
+function auto_feed_btn_normalize_imdb(value) {
+    var m = String(value || '').match(/tt\d+/i);
+    return m ? m[0] : '';
+}
+function auto_feed_btn_extract_imdb_from_page_or_url() {
+    var imdbid = '';
+    try {
+        var u = new URL(location.href);
+        imdbid = auto_feed_btn_normalize_imdb(
+            u.searchParams.get('imdbid') ||
+            u.searchParams.get('searchstr') ||
+            u.searchParams.get('search') ||
+            u.searchParams.get('q') ||
+            ''
+        );
+    } catch(e) {}
+    if (!imdbid) {
+        // BTN series pages do not keep the IMDb id in the URL, but the top linkbox
+        // usually has an [IMDB] link. Read all imdb hrefs/text, including links
+        // added by the site's own markup or by the original helper block below.
+        try {
+            var imdbText = $('a[href*="imdb"], a:contains("IMDB"), a:contains("IMDb")').map(function(){
+                return [$(this).attr('href') || '', $(this).text() || ''].join(' ');
+            }).get().join(' ');
+            imdbid = auto_feed_btn_normalize_imdb(imdbText);
+        } catch(e) {}
+    }
+    if (!imdbid) {
+        try {
+            // If BTN auto-redirected from the search URL, the referrer may still
+            // contain imdbid=ttxxxx even though the final series URL does not.
+            imdbid = auto_feed_btn_normalize_imdb(document.referrer || '');
+        } catch(e) {}
+    }
+    if (!imdbid) {
+        try {
+            imdbid = auto_feed_btn_normalize_imdb(String(document.body && document.body.innerHTML || ''));
+        } catch(e) {}
+    }
+    return imdbid || '';
+}
+function auto_feed_btn_cache_current_search_imdb() {
+    try {
+        if (!site_url.match(/^https?:\/\/(broadcasthe.net|backup.landof.tv)\//)) return '';
+        var imdbid = auto_feed_btn_extract_imdb_from_page_or_url();
+        if (!imdbid) return '';
+        var cache = auto_feed_btn_read_imdb_cache();
+        var host = location.hostname;
+        cache[host + '|latest'] = { imdbid: imdbid, ts: Date.now(), from: location.href };
+        $('a[href*="series.php?id="],a[href*="torrents.php?id="]').each(function(){
+            var key = auto_feed_btn_cache_key_for_href($(this).attr('href') || '');
+            if (key) cache[key] = { imdbid: imdbid, ts: Date.now(), from: location.href };
+        });
+        auto_feed_btn_write_imdb_cache(cache);
+        return imdbid;
+    } catch(e) { return ''; }
+}
+function auto_feed_btn_get_cached_imdb_for_current_page() {
+    try {
+        var cache = auto_feed_btn_read_imdb_cache();
+        var key = auto_feed_btn_cache_key_for_href(location.href);
+        if (key && cache[key] && cache[key].imdbid) return cache[key].imdbid;
+        var latest = cache[location.hostname + '|latest'];
+        if (latest && latest.imdbid && Date.now() - latest.ts < 10 * 60 * 1000) return latest.imdbid;
+    } catch(e) {}
+    return '';
+}
+function auto_feed_btn_bind_search_imdb_cache() {
+    try {
+        if (!site_url.match(/^https?:\/\/(broadcasthe.net|backup.landof.tv)\//)) return;
+        auto_feed_btn_cache_current_search_imdb();
+        $(document).on('mousedown click', 'a[href*="series.php?id="],a[href*="torrents.php?id="]', function(){
+            try {
+                var imdbid = auto_feed_btn_extract_imdb_from_page_or_url() || auto_feed_btn_get_cached_imdb_for_current_page();
+                if (!imdbid) return;
+                var key = auto_feed_btn_cache_key_for_href($(this).attr('href') || '');
+                if (!key) return;
+                var cache = auto_feed_btn_read_imdb_cache();
+                cache[key] = { imdbid: imdbid, ts: Date.now(), from: location.href };
+                cache[location.hostname + '|latest'] = { imdbid: imdbid, ts: Date.now(), from: location.href };
+                auto_feed_btn_write_imdb_cache(cache);
+            } catch(e) {}
+        });
+    } catch(e) {}
+}
+function auto_feed_btn_add_douban_first_season_score(retryCount) {
+    retryCount = retryCount || 0;
+    try {
+        if (!all_sites_show_douban) return;
+        if (!site_url.match(/^https?:\/\/(broadcasthe.net|backup.landof.tv)\//)) return;
+        if ($('#auto-feed-btn-douban-title-score').length) return;
+
+        var imdbid = auto_feed_btn_extract_imdb_from_page_or_url() || auto_feed_btn_get_cached_imdb_for_current_page();
+        if (!imdbid) {
+            auto_feed_btn_cache_current_search_imdb();
+            imdbid = auto_feed_btn_get_cached_imdb_for_current_page();
+        }
+        if (!imdbid) return;
+
+        var $title = $('#content div.linkbox font[color="red"], #content div.linkbox font[size], #content h1').filter(function(){
+            var text = ($(this).text() || '').trim();
+            return text.length > 2 && !text.match(/^\[|Tools|脚本设置|Notify|Add to Favorites|Autofill|Edit|View history/i);
+        }).first();
+        if (!$title.length) $title = $('h1').filter(function(){ return ($(this).text() || '').trim().length > 0; }).first();
+        if (!$title.length) {
+            var $candidate = $('#content').find('font[size], font').filter(function(){
+                var text = ($(this).text() || '').trim();
+                return text.length > 2 && !text.match(/^\[|Tools|脚本设置|Notify|Add to Favorites|Autofill|Edit|View history/i);
+            }).first();
+            if ($candidate.length) $title = $candidate;
+        }
+        if (!$title.length) {
+            if (retryCount < 10) setTimeout(function(){ auto_feed_btn_add_douban_first_season_score(retryCount + 1); }, 500);
+            return;
+        }
+
+        getData('https://www.imdb.com/title/' + imdbid + '/', function(data){
+            try {
+                if (!data || !data.data || $('#auto-feed-btn-douban-title-score').length) return;
+                var title = popcorn_douban_title(data);
+                var score = popcorn_douban_score(data);
+                if (!title || title === '豆瓣') return;
+                var doubanId = data.data.id;
+                var $badge = $('<span id="auto-feed-btn-douban-title-score"></span>');
+                $badge.append(' | ');
+                $('<a></a>')
+                    .attr('href', douban_prex + doubanId)
+                    .attr('target', '_blank')
+                    .css({
+                        'display': 'inline',
+                        'width': 'auto',
+                        'border-bottom': '0px',
+                        'text-decoration': 'none',
+                        'color': 'inherit',
+                        'font-weight': 'bold'
+                    })
+                    .text(title + '[' + score + ']')
+                    .appendTo($badge);
+                $title.append($badge);
+            } catch(err) { console.log('[auto_feed] BTN Douban title skipped:', err); }
+        });
+    } catch(err) {
+        console.log('[auto_feed] BTN Douban title skipped:', err);
+    }
+}
+
+if (site_url.match(/^https?:\/\/(broadcasthe.net|backup.landof.tv)\/(torrents|series)\.php.*/)) {
+    auto_feed_btn_bind_search_imdb_cache();
+    setTimeout(function(){ auto_feed_btn_cache_current_search_imdb(); auto_feed_btn_add_douban_first_season_score(0); }, 500);
+    setTimeout(function(){ auto_feed_btn_cache_current_search_imdb(); auto_feed_btn_add_douban_first_season_score(1); }, 1500);
+    setTimeout(function(){ auto_feed_btn_cache_current_search_imdb(); auto_feed_btn_add_douban_first_season_score(2); }, 3000);
+    setTimeout(function(){ auto_feed_btn_cache_current_search_imdb(); auto_feed_btn_add_douban_first_season_score(3); }, 5000);
+}
 if (site_url.match(/^https?:\/\/(broadcasthe.net|backup.landof.tv)\/series.php\?id=\d+/)) {
     var name = $('title').text().split(':')[0].trim();
     var imdb_url = $('img[src*="tvicon/imdb.png"]:eq(0)').parent().attr('href');
