@@ -3,146 +3,29 @@
 (() => {
 
 const AUTO_FEED_ALLOWED_HOSTS = [
-  "1ptba.com",
-  "3wmg.com",
-  "52pt.site",
-  "anthelion.me",
-  "asiancinema.me",
-  "assrt.net",
   "audiences.me",
-  "avistaz.to",
-  "azusa.wiki",
+  "backup.landof.tv",
   "beyond-hd.me",
-  "blutopia.cc",
-  "blutopia.xyz",
   "broadcasthe.net",
-  "byr.pt",
-  "carpt.net",
-  "cinemageddon.net",
-  "cinematik.net",
-  "cinemaz.to",
-  "club.hares.top",
-  "cyanbug.net",
-  "dajiao.cyou",
-  "dicmusic.com",
-  "discfan.net",
   "douban.com",
-  "dragonhd.xyz",
-  "et8.org",
-  "filelist.io",
-  "gamegamept.com",
   "greatposterwall.com",
-  "haidan.video",
-  "hd-only.org",
-  "hd-space.org",
-  "hd-torrents.org",
-  "hdarea.club",
-  "hdatmos.club",
   "hdbits.org",
-  "hdchina.org",
-  "hdcity.city",
-  "hddolby.com",
-  "hdf.world",
-  "hdfans.org",
-  "hdfun.me",
-  "hdhome.org",
-  "hdmayi.com",
-  "hdpt.xyz",
-  "hdroute.org",
-  "hdsky.me",
-  "hdtime.org",
-  "hdvideo.one",
-  "hhanclub.top",
-  "hitpt.com",
-  "htpt.cc",
-  "hudbt.hust.edu.cn",
-  "icc2022.com",
   "imdb.com",
-  "joyhd.net",
-  "jptv.club",
   "karagarga.in",
   "kp.m-team.cc",
-  "kufei.org",
-  "leaves.red",
-  "lemonhd.org",
   "m.douban.com",
-  "monikadesign.uk",
-  "morethantv.me",
   "movie.douban.com",
-  "nanyangpt.com",
-  "nebulance.io",
-  "npupt.com",
-  "nzbs.in",
-  "okpt.net",
-  "open.cd",
   "orpheus.network",
-  "oshen.win",
   "ourbits.club",
-  "pandapt.net",
   "passthepopcorn.me",
-  "piggo.me",
-  "privatehd.to",
-  "pt.0ff.cc",
-  "pt.2xfree.org",
-  "pt.btschool.club",
-  "pt.eastgame.org",
-  "pt.gtk.pw",
-  "pt.hd4fans.org",
-  "pt.hdbd.us",
-  "pt.hdpost.top",
-  "pt.hdupt.com",
-  "pt.itzmx.com",
-  "pt.keepfrds.com",
-  "pt.sjtu.edu.cn",
-  "pt.soulvoice.club",
-  "ptcafe.club",
   "ptchdbits.co",
-  "ptchina.org",
-  "pterclub.com",
-  "pthome.net",
-  "ptlsp.com",
-  "ptsbao.club",
-  "pttime.org",
   "redacted.ch",
-  "resource.xidian.edu.cn",
-  "rousi.zip",
+  "redacted.sh",
   "search.douban.com",
-  "secret-cinema.pw",
-  "shadowthein.net",
-  "springsunday.net",
-  "srvfi.top",
-  "tjupt.org",
   "totheglory.im",
-  "tv-vault.me",
-  "ubits.club",
-  "uhdbits.org",
-  "ultrahd.net",
-  "wintersakura.net",
-  "wukongwendao.top",
-  "www.3wmg.com",
-  "www.cinematik.net",
   "www.douban.com",
-  "www.dragonhd.xyz",
-  "www.gamegamept.com",
-  "www.haidan.video",
-  "www.hddolby.com",
-  "www.hitpt.com",
-  "www.htpt.cc",
-  "www.icc2022.com",
   "www.imdb.com",
-  "www.joyhd.net",
-  "www.morethantv.me",
-  "www.okpt.net",
-  "www.oshen.win",
-  "www.pthome.net",
-  "www.ptlsp.com",
-  "www.pttime.org",
-  "www.tjupt.org",
-  "xingtan.one",
-  "xthor.tk",
-  "zhuque.in",
-  "zmk.pw",
-  "zmpt.cc"
+  "zp.m-team.io"
 ];
 
 function autoFeedHostAllowed(url) {
@@ -170,7 +53,67 @@ function autoFeedHostAllowed(url) {
     return false;
   }
 
-  if (shouldSkipAutoFeedInjection()) return;
+  function parseCsvJsonForAllowed(value) {
+    if (value == null || value === '') return [];
+    let v = value;
+    if (typeof v === 'string') { try { v = JSON.parse(v); } catch (e) {} }
+    if (Array.isArray(v)) return v;
+    if (typeof v === 'string') return v.split(',').map(x => x.trim()).filter(Boolean);
+    return [];
+  }
+
+  function hrefFromQuickHtml(html) {
+    const m = String(html || '').match(/href=["']([^"']+)/i);
+    return m ? m[1] : '';
+  }
+
+  async function autoFeedHostAllowedDynamic(url) {
+    if (autoFeedHostAllowed(url)) return true;
+    try {
+      const host = new URL(String(url || location.href || '')).hostname.toLowerCase();
+      const data = await chrome.storage.local.get(['used_search_list']);
+      const lines = parseCsvJsonForAllowed(data.used_search_list);
+      for (const line of lines) {
+        const href = hrefFromQuickHtml(line);
+        if (!href) continue;
+        try {
+          const u = new URL(href.replace(/\{[^}]+\}/g, 'tt0000000'));
+          const h = u.hostname.toLowerCase();
+          if (host === h || host.endsWith('.' + h) || h.endsWith('.' + host)) return true;
+        } catch (e) {}
+      }
+    } catch (e) {}
+    return false;
+  }
+
+  async function shouldSkipAutoFeedInjectionAsync() {
+    try {
+      const href = String(location.href || '');
+      if (!(await autoFeedHostAllowedDynamic(href))) return true;
+      if (/(?:\.(?:rss|atom|xml)(?:[?#]|$)|\/feed(?:\.(?:rss|xml|atom))?(?:[?#]|$))/i.test(href)) return true;
+      const contentType = String(document.contentType || '');
+      if (contentType && !/html|xhtml/i.test(contentType)) return true;
+      const rootName = document.documentElement && document.documentElement.nodeName;
+      if (rootName && !/^html$/i.test(rootName)) return true;
+    } catch (e) { return true; }
+    return false;
+  }
+
+  async function continueAutoFeedInjection() {
+  try {
+    const u = new URL(location.href);
+    if (u.hostname === 'beyond-hd.me' && /^\/(library\/title|torrents\/)/i.test(u.pathname)) {
+      document.documentElement.classList.add('popcorn-bhd-suppress-search');
+      const st = document.createElement('style');
+      st.id = 'popcorn-bhd-prehide-search-urls';
+      st.textContent = [
+        'html.popcorn-bhd-suppress-search .search_urls{visibility:hidden!important}',
+        'html.popcorn-bhd-suppress-search #forward_r .search_urls,html.popcorn-bhd-suppress-search .popcorn-bhd-allow-search{visibility:visible!important}'
+      ].join('\n');
+      (document.head || document.documentElement).appendChild(st);
+    }
+  } catch (e) {}
+
 
   function runtimeSend(type, payload) {
     return new Promise((resolve) => {
@@ -232,4 +175,9 @@ function autoFeedHostAllowed(url) {
     }
     console.debug('[auto_feed extension] loaded');
   });
+  }
+
+  shouldSkipAutoFeedInjectionAsync().then((skip) => {
+    if (!skip) continueAutoFeedInjection();
+  }).catch((e) => console.debug('[auto_feed extension] dynamic allow check failed', e));
 })();

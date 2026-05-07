@@ -3,10 +3,13 @@ const $$ = (sel, root=document) => root ? Array.from(root.querySelectorAll(sel))
 const D = window.AUTO_FEED_DEFAULTS;
 let current = {};
 let quickSearchLibrary = [];
+let customQuickSearchLibrary = [];
 
 const QUICK_DEFAULT_KEYS = ['PTP','BHD','CHD','ADE','GPW','BTN','豆瓣'];
 const QUICK_SITE_KEY_MAP = { PTP:'PTP', BHD:'BHD', CHD:'CHD', ADE:'ADE', GPW:'GPW', BTN:'BTN', '豆瓣':'豆瓣', Douban:'豆瓣' };
 const DEFAULT_SERIES_SEARCH_SITES = ['BHD','BTN'];
+const DEFAULT_DARK_BACKGROUND_SITES = ['BHD'];
+const DEFAULT_TRANSMISSION_SITES = ['PTP','BTN'];
 const FORWARD_SITE_ALLOWLIST = ['Audiences','BHD','BTN','CHDBits','GPW','HDB','KG','MTeam','OPS','OurBits','PTP','RED','TTG'];
 function isForwardSettingSite(k){ return FORWARD_SITE_ALLOWLIST.includes(k); }
 function seriesKeyFromHtml(html){
@@ -19,6 +22,57 @@ function normalizeSeriesSearchSites(list, searchList){
   let picked = Array.isArray(list) ? list.map(x => String(x || '').trim()).filter(Boolean) : [];
   if (!picked.length) picked = DEFAULT_SERIES_SEARCH_SITES.slice();
   return Array.from(new Set(picked)).filter(k => available.includes(k));
+}
+function normalizeDarkBackgroundSites(list, searchList){
+  const available = Array.from(new Set((searchList || []).map(seriesKeyFromHtml).filter(Boolean)));
+  const picked = Array.isArray(list) ? list.map(x => String(x || '').trim()).filter(Boolean) : [];
+  return Array.from(new Set(picked)).filter(k => available.includes(k));
+}
+function normalizeTransmissionSites(list, searchList){
+  const available = Array.from(new Set((searchList || []).map(seriesKeyFromHtml).filter(Boolean)));
+  let picked = Array.isArray(list) ? list.map(x => String(x || '').trim()).filter(Boolean) : [];
+  if (!picked.length) picked = DEFAULT_TRANSMISSION_SITES.slice();
+  return Array.from(new Set(picked)).filter(k => available.includes(k));
+}
+function normalizeRpcUrl(url){
+  url = String(url || '').trim();
+  if (!url) return '';
+  if (!/^https?:\/\//i.test(url)) url = 'http://' + url;
+  try {
+    const u = new URL(url);
+    if (!/\/transmission\/rpc\/?$/i.test(u.pathname)) {
+      u.pathname = (u.pathname.replace(/\/+$/,'') || '') + '/transmission/rpc';
+    }
+    return u.href;
+  } catch (_) {
+    return '';
+  }
+}
+function buildQuickHtml(name, href){
+  name = String(name || '').trim();
+  href = String(href || '').trim();
+  if (!name || !href) return '';
+  return `<a href="${esc(href)}" target="_blank">${esc(name)}</a>`;
+}
+function normalizeQuickLibraryItem(item){
+  const name = String(item && item.name || '').trim();
+  const href = String(item && item.href || '').trim();
+  if (!name || !href) return null;
+  const html = item.html || buildQuickHtml(name, href);
+  return { name, href, html };
+}
+function mergeQuickLibraries(base, custom){
+  const out = [];
+  const seen = new Set();
+  [...(base || []), ...(custom || [])].forEach(raw => {
+    const item = normalizeQuickLibraryItem(raw);
+    if (!item) return;
+    const key = item.name.toLowerCase();
+    if (seen.has(key)) return;
+    seen.add(key);
+    out.push(item);
+  });
+  return out;
 }
 const LEGACY_QUICK_KEYS = ['PTP','BHD','GPW','BLU','TTG','MTeam','KG'];
 function normalizeSearchList(lines){
@@ -141,7 +195,23 @@ function defaultsState(data){
   if (!common.length || JSON.stringify(common) !== JSON.stringify(derivedCommon)) common = derivedCommon;
   const signinSites = parseMaybeJson(data.__auto_feed_keepalive_sites, []);
   const seriesSites = normalizeSeriesSearchSites(parseCsvJson(data.__popcorn_series_search_sites, DEFAULT_SERIES_SEARCH_SITES), searchList);
-  return { usedSiteInfo, siteOrder, common, showSearch, extra, rehost, searchList, hidden, signinSites, seriesSites };
+  const rawDarkSites = data.__popcorn_dark_background_sites;
+  const parsedDarkSites = rawDarkSites === undefined ? DEFAULT_DARK_BACKGROUND_SITES : parseCsvJson(rawDarkSites, []);
+  const darkSites = normalizeDarkBackgroundSites(parsedDarkSites, searchList);
+  const rawTmSites = data.__popcorn_tm_sites;
+  const parsedTmSites = rawTmSites === undefined ? DEFAULT_TRANSMISSION_SITES : parseCsvJson(rawTmSites, []);
+  const tmSites = normalizeTransmissionSites(parsedTmSites, searchList);
+  const tmConfig = {
+    enabled: !!num(data.__popcorn_tm_enabled, 0),
+    rpcLan: data.__popcorn_tm_rpc_lan || '',
+    rpcWan: data.__popcorn_tm_rpc_wan || '',
+    rpcMode: data.__popcorn_tm_rpc_mode || 'lan',
+    username: data.__popcorn_tm_username || '',
+    password: data.__popcorn_tm_password || '',
+    movieDir: data.__popcorn_tm_movie_dir || data.__popcorn_tm_download_dir || '',
+    tvDir: data.__popcorn_tm_tv_dir || ''
+  };
+  return { usedSiteInfo, siteOrder, common, showSearch, extra, rehost, searchList, hidden, signinSites, seriesSites, darkSites, tmSites, tmConfig };
 }
 
 function renderQuickSelected(st){
@@ -160,6 +230,48 @@ function renderSeriesSearchSites(st){
   }).filter(([k]) => !!k)).values());
   if (!items.length) { box.innerHTML = '<span class="muted small">当前没有可配置的快速搜索站点。</span>'; return; }
   box.innerHTML = items.map(x => `<label class="chip" title="${esc(x.href)}"><input type="checkbox" class="series-search-site" data-series-site="${esc(x.key)}" ${st.seriesSites.includes(x.key) ? 'checked' : ''}> <b>${esc(x.name)}</b></label>`).join('');
+}
+function renderDarkBackgroundSites(st){
+  const box = $('dark_background_sites');
+  if (!box) return;
+  const items = Array.from(new Map(st.searchList.map(html => {
+    const key = seriesKeyFromHtml(html);
+    return [key, { key, name: extractAnchorName(html), href: extractAnchorHref(html) }];
+  }).filter(([k]) => !!k)).values());
+  if (!items.length) { box.innerHTML = '<span class="muted small">当前快捷搜索列表为空。</span>'; return; }
+  box.innerHTML = items.map(x => `<label class="chip" title="${esc(x.href)}"><input type="checkbox" class="dark-background-site" data-dark-site="${esc(x.key)}" ${st.darkSites.includes(x.key) ? 'checked' : ''}> <b>${esc(x.name)}</b></label>`).join('');
+}
+
+function renderTransmissionSites(st){
+  const box = $('tm_sites');
+  if (!box) return;
+  const items = Array.from(new Map(st.searchList.map(html => {
+    const key = seriesKeyFromHtml(html);
+    return [key, { key, name: extractAnchorName(html), href: extractAnchorHref(html) }];
+  }).filter(([k]) => !!k)).values());
+  if (!items.length) { box.innerHTML = '<span class="muted small">当前快捷搜索列表为空。</span>'; return; }
+  box.innerHTML = items.map(x => `<label class="chip" title="${esc(x.href)}"><input type="checkbox" class="tm-site" data-tm-site="${esc(x.key)}" ${st.tmSites.includes(x.key) ? 'checked' : ''}> <b>${esc(x.name)}</b></label>`).join('');
+}
+function setTransmissionEditing(editing){
+  const panel = document.querySelector('.tm-panel');
+  if (panel) panel.classList.toggle('editing', !!editing);
+  ['tm_enabled','tm_rpc_lan','tm_rpc_wan','tm_rpc_mode','tm_movie_dir','tm_tv_dir','tm_username','tm_password'].forEach(id => { const el=$(id); if (el) el.disabled = !editing; });
+  const btn = $('tm_edit_save');
+  if (btn) { btn.textContent = editing ? '保存' : '修改'; btn.dataset.editing = editing ? '1' : '0'; }
+}
+function renderTransmissionConfig(st){
+  const cfg = st.tmConfig || {};
+  if (!$('tm_enabled')) return;
+  $('tm_enabled').checked = !!cfg.enabled;
+  $('tm_rpc_lan').value = cfg.rpcLan || '';
+  $('tm_rpc_wan').value = cfg.rpcWan || '';
+  $('tm_rpc_mode').value = cfg.rpcMode === 'wan' ? 'wan' : 'lan';
+  $('tm_username').value = cfg.username || '';
+  $('tm_password').value = cfg.password || '';
+  $('tm_movie_dir').value = cfg.movieDir || '';
+  $('tm_tv_dir').value = cfg.tvDir || '';
+  renderTransmissionSites(st);
+  setTransmissionEditing(false);
 }
 
 function renderSignin(st){
@@ -184,24 +296,22 @@ function renderFromData(data){
   const st = defaultsState(current);
   $('used_tmdb_key').value = current.used_tmdb_key ?? '0f79586eb9d92afa2b7266f7928b055c';
   $('used_ptp_img_key').value = current.used_ptp_img_key ?? '';
-  $('used_tl_rss_key').value = current.used_tl_rss_key ?? '';
   $('if_uplver').checked = !!num(current.if_uplver, 1);
   $('if_douban_jump').checked = !!num(current.if_douban_jump, 1);
   $('if_imdb_jump').checked = !!num(current.if_imdb_jump, 1);
-  $('hdb_hide_douban').checked = !!num(current.hdb_hide_douban, 0);
-  $('chd_use_backup_url').checked = !!num(current.chd_use_backup_url, 0);
   $('nhd_use_v6_url').checked = !!num(current.nhd_use_v6_url, 0);
   setRadio('imdb2db', String(current.imdb2db_chosen ?? 0));
   setRadio('ptgen', String(current.api_chosen ?? 3));
-  setRadio('tldomain', String(current.tldomain ?? 0));
 
   $('site_grid').innerHTML = st.siteOrder.filter(isForwardSettingSite).map(k=>`<label><input type="checkbox" class="support_site" data-site="${esc(k)}" ${st.usedSiteInfo[k]?.enable ? 'checked':''}><span>${esc(k)}</span></label>`).join('');
   renderQuickToggles(st);
   $('extra_grid').innerHTML = Object.entries(st.extra).map(([k,v])=>`<label><input type="checkbox" class="extra" data-key="${esc(k)}" ${v.enable ? 'checked':''}>${esc(v.title || k)}</label>`).join('');
-  $('rehost_keys').innerHTML = Object.entries(st.rehost).filter(([k])=>k!=='catbox').map(([k,v])=>`<label>${esc(k)} apikey<input class="rehost_key" data-key="${esc(k)}" value="${esc(v['api-key']||'')}"></label>`).join('');
+  $('rehost_keys').innerHTML = Object.entries(st.rehost).filter(([k])=>!['catbox','gifyu','pstorage'].includes(k)).map(([k,v])=>`<label>${esc(k)} apikey<input class="rehost_key" data-key="${esc(k)}" value="${esc(v['api-key']||'')}"></label>`).join('');
   $('used_search_list').value = st.searchList.join('\n');
   renderQuickSelected(st);
   renderSeriesSearchSites(st);
+  renderDarkBackgroundSites(st);
+  renderTransmissionConfig(st);
   renderSignin(st);
   $('json').value = JSON.stringify(current, null, 2);
 }
@@ -209,7 +319,10 @@ function setRadio(name, value){ const el=document.querySelector(`input[name="${n
 function getRadio(name, fallback){ return document.querySelector(`input[name="${name}"]:checked`)?.value ?? fallback; }
 
 async function loadQuickSearchLibrary(){
-  try { quickSearchLibrary = await fetch('../data/quick_search_library.json').then(r=>r.json()); } catch(e) { quickSearchLibrary = []; }
+  let base = [];
+  try { base = await fetch('../data/quick_search_library.json').then(r=>r.json()); } catch(e) { base = []; }
+  try { customQuickSearchLibrary = parseMaybeJson((await chrome.storage.local.get('__popcorn_custom_quick_search_library')).__popcorn_custom_quick_search_library, []); } catch(e) { customQuickSearchLibrary = []; }
+  quickSearchLibrary = mergeQuickLibraries(base, customQuickSearchLibrary);
   const dl = $('quick_search_library');
   if (dl) dl.innerHTML = quickSearchLibrary.map(x=>`<option value="${esc(x.name)}">${esc(x.href)}</option>`).join('');
 }
@@ -218,7 +331,7 @@ function selectedQuickSearch(){
   if (!v) return null;
   return quickSearchLibrary.find(x=>x.name.toLowerCase()===v.toLowerCase()) || quickSearchLibrary.find(x=>x.name.toLowerCase().includes(v.toLowerCase()));
 }
-async function load(){ await loadQuickSearchLibrary(); const data = await chrome.storage.local.get(null); renderFromData(data); const st = defaultsState(data); const normalizedSearch = stringifyCsv(st.searchList); const normalizedCommon = stringifyCsv(st.common); const normalizedSeries = stringifyCsv(st.seriesSites); if (data.used_search_list !== normalizedSearch || data.used_common_sites !== normalizedCommon || data.__popcorn_series_search_sites !== normalizedSeries) { await chrome.storage.local.set({ used_search_list: normalizedSearch, used_common_sites: normalizedCommon, __popcorn_series_search_sites: normalizedSeries }); current = { ...data, used_search_list: normalizedSearch, used_common_sites: normalizedCommon, __popcorn_series_search_sites: normalizedSeries }; renderFromData(current); } setStatus('global_status','已加载当前设置'); }
+async function load(){ await loadQuickSearchLibrary(); const data = await chrome.storage.local.get(null); renderFromData(data); const st = defaultsState(data); const normalizedSearch = stringifyCsv(st.searchList); const normalizedCommon = stringifyCsv(st.common); const normalizedSeries = stringifyCsv(st.seriesSites); const normalizedDark = stringifyCsv(st.darkSites); const normalizedTm = stringifyCsv(st.tmSites); if (data.used_search_list !== normalizedSearch || data.used_common_sites !== normalizedCommon || data.__popcorn_series_search_sites !== normalizedSeries || data.__popcorn_dark_background_sites !== normalizedDark || data.__popcorn_tm_sites !== normalizedTm) { await chrome.storage.local.set({ used_search_list: normalizedSearch, used_common_sites: normalizedCommon, __popcorn_series_search_sites: normalizedSeries, __popcorn_dark_background_sites: normalizedDark, __popcorn_tm_sites: normalizedTm }); current = { ...data, used_search_list: normalizedSearch, used_common_sites: normalizedCommon, __popcorn_series_search_sites: normalizedSeries, __popcorn_dark_background_sites: normalizedDark, __popcorn_tm_sites: normalizedTm }; renderFromData(current); } setStatus('global_status','已加载当前设置'); }
 function collect(){
   const st = defaultsState(current);
   const data = {...current};
@@ -234,7 +347,7 @@ function collect(){
     if (key) showSearch[key] = 1;
   }
   const extra = st.extra; $$('.extra').forEach(cb=>{ extra[cb.dataset.key]=extra[cb.dataset.key]||{}; extra[cb.dataset.key].enable=cb.checked?1:0; });
-  const rehost = st.rehost; $$('.rehost_key').forEach(inp=>{ rehost[inp.dataset.key]=rehost[inp.dataset.key]||{}; rehost[inp.dataset.key]['api-key']=inp.value.trim(); });
+  const rehost = st.rehost; delete rehost.gifyu; delete rehost.pstorage; $$('.rehost_key').forEach(inp=>{ rehost[inp.dataset.key]=rehost[inp.dataset.key]||{}; rehost[inp.dataset.key]['api-key']=inp.value.trim(); });
   const signinSites = $$('.signin-row').map(row => ({
     enabled: row.querySelector('.signin-enabled').checked,
     name: row.querySelector('.signin-name').value.trim(),
@@ -246,6 +359,8 @@ function collect(){
     lastError: row.dataset.lastError || ''
   })).filter(x => x.name || x.url).map(x => ({...x, name: x.name || new URL(x.url).hostname}));
   const seriesSites = $$('.series-search-site').filter(cb => cb.checked).map(cb => cb.dataset.seriesSite).filter(Boolean);
+  const darkSites = $$('.dark-background-site').filter(cb => cb.checked).map(cb => cb.dataset.darkSite).filter(Boolean);
+  const tmSites = $$('.tm-site').filter(cb => cb.checked).map(cb => cb.dataset.tmSite).filter(Boolean);
   data.site_order = stringifyCsv(siteOrder);
   data.used_site_info = JSON.stringify(usedSiteInfo);
   data.used_common_sites = stringifyCsv(common);
@@ -254,15 +369,11 @@ function collect(){
   data.used_search_list = stringifyCsv($('used_search_list').value.split('\n').map(s=>s.trim()).filter(Boolean));
   data.used_tmdb_key = $('used_tmdb_key').value.trim();
   data.used_ptp_img_key = $('used_ptp_img_key').value.trim();
-  data.used_tl_rss_key = $('used_tl_rss_key').value.trim();
   data.imdb2db_chosen = getRadio('imdb2db', '0');
   data.api_chosen = getRadio('ptgen', '3');
-  data.tldomain = getRadio('tldomain', '0');
   data.if_uplver = $('if_uplver').checked ? 1 : 0;
   data.if_douban_jump = $('if_douban_jump').checked ? 1 : 0;
   data.if_imdb_jump = $('if_imdb_jump').checked ? 1 : 0;
-  data.hdb_hide_douban = $('hdb_hide_douban').checked ? 1 : 0;
-  data.chd_use_backup_url = $('chd_use_backup_url').checked ? 1 : 0;
   data.nhd_use_v6_url = $('nhd_use_v6_url').checked ? 1 : 0;
   data.used_rehost_img_info = JSON.stringify(rehost);
   data.__auto_feed_keepalive_enabled = $('keepalive_enabled').checked ? 1 : 0;
@@ -270,6 +381,17 @@ function collect(){
   data.__auto_feed_keepalive_close_delay = Math.max(1, Math.min(30, Number($('keepalive_close_delay').value || 2)));
   data.__auto_feed_keepalive_sites = signinSites;
   data.__popcorn_series_search_sites = stringifyCsv(seriesSites);
+  data.__popcorn_dark_background_sites = stringifyCsv(darkSites);
+  data.__popcorn_tm_sites = stringifyCsv(tmSites);
+  data.__popcorn_tm_enabled = $('tm_enabled') && $('tm_enabled').checked ? 1 : 0;
+  data.__popcorn_tm_rpc_lan = $('tm_rpc_lan') ? $('tm_rpc_lan').value.trim() : '';
+  data.__popcorn_tm_rpc_wan = $('tm_rpc_wan') ? $('tm_rpc_wan').value.trim() : '';
+  data.__popcorn_tm_rpc_mode = $('tm_rpc_mode') ? $('tm_rpc_mode').value : 'lan';
+  data.__popcorn_tm_username = $('tm_username') ? $('tm_username').value.trim() : '';
+  data.__popcorn_tm_password = $('tm_password') ? $('tm_password').value : '';
+  data.__popcorn_tm_movie_dir = $('tm_movie_dir') ? $('tm_movie_dir').value.trim() : '';
+  data.__popcorn_tm_tv_dir = $('tm_tv_dir') ? $('tm_tv_dir').value.trim() : '';
+  data.__popcorn_tm_download_dir = data.__popcorn_tm_movie_dir;
   return data;
 }
 async function saveAll(){
@@ -298,8 +420,10 @@ $('delete_selected_sites').onclick=async()=>{
 };
 $('restore_deleted_sites').onclick=async()=>{ await chrome.storage.local.set({ __auto_feed_hidden_sites: stringifyCsv([]) }); await load(); document.querySelector('[data-tab="sites"]').click(); setStatus('global_status','已恢复所有隐藏站点'); };
 $('site_grid').addEventListener('change',()=>{ const data=collect(); current=data; renderFromData(data); document.querySelector('[data-tab="sites"]').click(); });
-$('used_search_list').addEventListener('input',()=>{ const data=collect(); current=data; const st=defaultsState(data); renderQuickToggles(st); renderQuickSelected(st); renderSeriesSearchSites(st); });
+$('used_search_list').addEventListener('input',()=>{ const data=collect(); current=data; const st=defaultsState(data); renderQuickToggles(st); renderQuickSelected(st); renderSeriesSearchSites(st); renderDarkBackgroundSites(st); renderTransmissionSites(st); });
 if ($('series_search_sites')) $('series_search_sites').addEventListener('change',()=>{ const data=collect(); current=data; const st=defaultsState(data); renderSeriesSearchSites(st); });
+if ($('dark_background_sites')) $('dark_background_sites').addEventListener('change',()=>{ const data=collect(); current=data; const st=defaultsState(data); renderDarkBackgroundSites(st); });
+if ($('tm_sites')) $('tm_sites').addEventListener('change',()=>{ const data=collect(); current=data; const st=defaultsState(data); renderTransmissionSites(st); });
 $('quick_selected_list').addEventListener('click',(e)=>{
   const btn = e.target.closest('[data-remove-quick]');
   if (!btn) return;
@@ -307,7 +431,7 @@ $('quick_selected_list').addEventListener('click',(e)=>{
   const lines = $('used_search_list').value.split('\n').map(s=>s.trim()).filter(Boolean);
   lines.splice(idx, 1);
   $('used_search_list').value = lines.join('\n');
-  const data=collect(); current=data; const st=defaultsState(data); renderQuickToggles(st); renderQuickSelected(st);
+  const data=collect(); current=data; const st=defaultsState(data); renderQuickToggles(st); renderQuickSelected(st); renderSeriesSearchSites(st); renderDarkBackgroundSites(st); renderTransmissionSites(st);
   setStatus('global_status','已从快速搜索列表移除，记得保存全部设置');
 });
 $('save_json').onclick=async()=>{ try{ const data=JSON.parse($('json').value); await chrome.storage.local.clear(); await chrome.storage.local.set(data); renderFromData(data); setStatus('json_status','已保存 JSON，刷新目标页面后生效'); }catch(e){ setStatus('json_status','JSON 格式错误：'+e.message,true); } };
@@ -356,8 +480,72 @@ if ($('add_quick_search')) $('add_quick_search').onclick = (e) => {
   const exists = currentText.includes(item.href) || currentText.includes('>'+item.name+'</a>');
   if (exists) { setStatus('global_status', '这个快速搜索站点看起来已经存在了'); return; }
   ta.value = currentText ? currentText + '\n' + item.html : item.html;
-  const data=collect(); current=data; const st=defaultsState(data); renderQuickToggles(st); renderQuickSelected(st);
+  const data=collect(); current=data; const st=defaultsState(data); renderQuickToggles(st); renderQuickSelected(st); renderSeriesSearchSites(st); renderDarkBackgroundSites(st); renderTransmissionSites(st);
   setStatus('global_status', '已添加“' + item.name + '”，记得保存全部设置');
 };
+
+
+if ($('add_manual_quick_search')) $('add_manual_quick_search').onclick = async (e) => {
+  e.preventDefault();
+  const name = $('manual_quick_name').value.trim();
+  const href = $('manual_quick_url').value.trim();
+  if (!name || !href) { setStatus('global_status', '请输入网站名和搜索网址', true); return; }
+  if (!/^https?:\/\//i.test(href)) { setStatus('global_status', '搜索网址必须以 http:// 或 https:// 开头', true); return; }
+  if (!/[{](imdbid|imdbno|search_name|searchname)[}]/i.test(href)) { setStatus('global_status', '搜索网址建议包含 {imdbid} / {imdbno} / {search_name} 占位符', true); return; }
+  const html = buildQuickHtml(name, href);
+  const ta = $('used_search_list');
+  const currentText = ta.value.trim();
+  const exists = currentText.includes(href) || currentText.includes('>'+name+'</a>');
+  if (!exists) ta.value = currentText ? currentText + '\n' + html : html;
+  const custom = mergeQuickLibraries(customQuickSearchLibrary, [{ name, href, html }]);
+  customQuickSearchLibrary = custom;
+  await chrome.storage.local.set({ __popcorn_custom_quick_search_library: customQuickSearchLibrary });
+  await loadQuickSearchLibrary();
+  $('manual_quick_name').value = ''; $('manual_quick_url').value = '';
+  const data=collect(); current=data; const st=defaultsState(data); renderQuickSelected(st); renderSeriesSearchSites(st); renderDarkBackgroundSites(st); renderTransmissionSites(st);
+  setStatus('global_status', '已添加“' + name + '”到当前快捷搜索和自定义库，记得保存全部设置');
+};
+
+
+async function saveTransmissionConfigOnly(){
+  const data = collect();
+  await chrome.storage.local.set({
+    __popcorn_tm_enabled: data.__popcorn_tm_enabled,
+    __popcorn_tm_rpc_lan: data.__popcorn_tm_rpc_lan,
+    __popcorn_tm_rpc_wan: data.__popcorn_tm_rpc_wan,
+    __popcorn_tm_rpc_mode: data.__popcorn_tm_rpc_mode,
+    __popcorn_tm_username: data.__popcorn_tm_username,
+    __popcorn_tm_password: data.__popcorn_tm_password,
+    __popcorn_tm_download_dir: data.__popcorn_tm_download_dir,
+    __popcorn_tm_movie_dir: data.__popcorn_tm_movie_dir,
+    __popcorn_tm_tv_dir: data.__popcorn_tm_tv_dir,
+    __popcorn_tm_sites: data.__popcorn_tm_sites
+  });
+  current = { ...current, ...data };
+  setTransmissionEditing(false);
+  setStatus('tm_status', 'Transmission 配置已保存，刷新目标站点后生效');
+}
+async function testTransmission(mode){
+  const cfg = collect();
+  const rpc = mode === 'wan' ? cfg.__popcorn_tm_rpc_wan : cfg.__popcorn_tm_rpc_lan;
+  if (!rpc) { setStatus('tm_status', '请先填写' + (mode === 'wan' ? '外网' : '局域网') + ' RPC 地址', true); return; }
+  setStatus('tm_status', '正在测试 ' + (mode === 'wan' ? '外网' : '局域网') + ' 连接...');
+  chrome.runtime.sendMessage({ type:'transmission_test', payload:{
+    rpcUrl: rpc,
+    username: cfg.__popcorn_tm_username,
+    password: cfg.__popcorn_tm_password
+  }}, (resp) => {
+    if (resp && resp.ok) setStatus('tm_status', '连接成功：' + (resp.data && resp.data.version ? 'Transmission ' + resp.data.version : 'RPC 可用'));
+    else setStatus('tm_status', '连接失败：' + ((resp && resp.error) || '未知错误'), true);
+  });
+}
+if ($('tm_edit_save')) $('tm_edit_save').onclick = async () => {
+  const editing = $('tm_edit_save').dataset.editing === '1';
+  if (!editing) { setTransmissionEditing(true); setStatus('tm_status', '已进入编辑模式'); return; }
+  await saveTransmissionConfigOnly();
+};
+if ($('tm_test_lan')) $('tm_test_lan').onclick = () => testTransmission('lan');
+if ($('tm_test_wan')) $('tm_test_wan').onclick = () => testTransmission('wan');
+
 
 load();

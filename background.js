@@ -32,6 +32,86 @@ function normalizeBackup(data) {
 
 const AUTO_FEED_DEFAULT_QUICK_SEARCH_LIST = ["<a href=\"https://passthepopcorn.me/torrents.php?searchstr={imdbid}\" target=\"_blank\">PTP</a>", "<a href=\"https://beyond-hd.me/torrents?search={imdbid}\" target=\"_blank\">BHD</a>", "<a href=\"https://ptchdbits.co/torrents.php?incldead=0&spstate=0&inclbookmarked=0&search={imdbid}&search_area=4&search_mode=0\" target=\"_blank\">CHD</a>", "<a href=\"https://audiences.me/torrents.php?cat401=1&cat402=1&cat403=1&incldead=0&spstate=0&inclbookmarked=0&search={imdbid}&search_area=4\" target=\"_blank\">ADE</a>", "<a href=\"https://greatposterwall.com/torrents.php?searchstr={imdbid}\" target=\"_blank\">GPW</a>", "<a href=\"https://broadcasthe.net/torrents.php?action=advanced&searchstr=&searchtags=&tags_type=1&groupdesc=&imdbid={imdbid}\" target=\"_blank\">BTN</a>", "<a href=\"https://search.douban.com/movie/subject_search?search_text={imdbid}&cat=1002\" target=\"_blank\">豆瓣</a>"];
 const AUTO_FEED_DEFAULT_QUICK_SEARCH_KEYS = ["PTP", "BHD", "CHD", "ADE", "GPW", "BTN", "豆瓣"];
+
+const AUTO_FEED_CLEAN_SITE_ORDER = ["Audiences", "BHD", "BTN", "CHDBits", "GPW", "HDB", "KG", "MTeam", "OPS", "OurBits", "PTP", "RED", "TTG"];
+const AUTO_FEED_CLEAN_SITE_INFO = {
+  "Audiences": {
+    "url": "https://audiences.me/",
+    "enable": 0
+  },
+  "BHD": {
+    "url": "https://beyond-hd.me/",
+    "enable": 0
+  },
+  "BTN": {
+    "url": "https://broadcasthe.net/",
+    "enable": 0
+  },
+  "CHDBits": {
+    "url": "https://ptchdbits.co/",
+    "enable": 0
+  },
+  "GPW": {
+    "url": "https://greatposterwall.com/",
+    "enable": 0
+  },
+  "HDB": {
+    "url": "https://hdbits.org/",
+    "enable": 0
+  },
+  "KG": {
+    "url": "https://karagarga.in/",
+    "enable": 0
+  },
+  "MTeam": {
+    "url": "https://kp.m-team.cc/",
+    "enable": 0
+  },
+  "OPS": {
+    "url": "https://orpheus.network/",
+    "enable": 0
+  },
+  "OurBits": {
+    "url": "https://ourbits.club/",
+    "enable": 0
+  },
+  "PTP": {
+    "url": "https://passthepopcorn.me/",
+    "enable": 0
+  },
+  "RED": {
+    "url": "https://redacted.sh/",
+    "enable": 0
+  },
+  "TTG": {
+    "url": "https://totheglory.im/",
+    "enable": 0
+  }
+};
+
+function parseAutoFeedJsonValue(value, fallback) {
+  if (typeof value === 'string') { try { return JSON.parse(value); } catch { return fallback; } }
+  return value && typeof value === 'object' ? value : fallback;
+}
+
+async function cleanupStoredSiteLibrary() {
+  try {
+    const data = await chrome.storage.local.get(['used_site_info','site_order','__auto_feed_hidden_sites']);
+    const current = parseAutoFeedJsonValue(data.used_site_info, {}) || {};
+    const cleaned = {};
+    for (const key of AUTO_FEED_CLEAN_SITE_ORDER) {
+      const old = current[key] && typeof current[key] === 'object' ? current[key] : {};
+      cleaned[key] = { ...AUTO_FEED_CLEAN_SITE_INFO[key], enable: old.enable === 1 ? 1 : 0 };
+    }
+    await chrome.storage.local.set({
+      used_site_info: JSON.stringify(cleaned),
+      site_order: JSON.stringify(AUTO_FEED_CLEAN_SITE_ORDER.join(',')),
+      __auto_feed_hidden_sites: JSON.stringify('')
+    });
+  } catch (e) {
+    console.warn('[Popcorn] could not clean site library:', e);
+  }
+}
 const AUTO_FEED_OLD_QUICK_SEARCH_KEYS = ["PTP", "BHD", "GPW", "BLU", "TTG", "MTeam", "KG"];
 
 function quickSearchKeyFromHtml(html) {
@@ -156,6 +236,7 @@ async function maybeOpenOptions(details) {
 chrome.runtime.onInstalled.addListener(async (details) => {
   await importInitialStorage(false);
   await disableForwardSitesInStorage();
+  await cleanupStoredSiteLibrary();
   await migrateShowSearchStorage();
   await migrateQuickSearchStorage();
   await maybeOpenOptions(details);
@@ -259,6 +340,7 @@ async function runKeepalive(force = false) {
 
 chrome.runtime.onStartup.addListener(async () => {
   await importInitialStorage(false);
+  await cleanupStoredSiteLibrary();
   await migrateShowSearchStorage();
   await migrateQuickSearchStorage();
   try { await runKeepalive(false); } catch (e) { console.warn('[auto_feed keepalive] startup failed:', e); }
@@ -267,151 +349,34 @@ chrome.runtime.onStartup.addListener(async () => {
 chrome.action.onClicked.addListener(() => chrome.runtime.openOptionsPage());
 
 const AUTO_FEED_ALLOWED_HOSTS = [
-  "1ptba.com",
-  "3wmg.com",
-  "52pt.site",
-  "anthelion.me",
-  "asiancinema.me",
-  "assrt.net",
   "audiences.me",
-  "avistaz.to",
-  "azusa.wiki",
+  "backup.landof.tv",
   "beyond-hd.me",
-  "blutopia.cc",
-  "blutopia.xyz",
   "broadcasthe.net",
-  "byr.pt",
-  "carpt.net",
-  "cinemageddon.net",
-  "cinematik.net",
-  "cinemaz.to",
-  "club.hares.top",
-  "cyanbug.net",
-  "dajiao.cyou",
-  "dicmusic.com",
-  "discfan.net",
   "douban.com",
-  "dragonhd.xyz",
-  "et8.org",
-  "filelist.io",
-  "gamegamept.com",
   "greatposterwall.com",
-  "haidan.video",
-  "hd-only.org",
-  "hd-space.org",
-  "hd-torrents.org",
-  "hdarea.club",
-  "hdatmos.club",
   "hdbits.org",
-  "hdchina.org",
-  "hdcity.city",
-  "hddolby.com",
-  "hdf.world",
-  "hdfans.org",
-  "hdfun.me",
-  "hdhome.org",
-  "hdmayi.com",
-  "hdpt.xyz",
-  "hdroute.org",
-  "hdsky.me",
-  "hdtime.org",
-  "hdvideo.one",
-  "hhanclub.top",
-  "hitpt.com",
-  "htpt.cc",
-  "hudbt.hust.edu.cn",
-  "icc2022.com",
   "imdb.com",
-  "joyhd.net",
-  "jptv.club",
   "karagarga.in",
   "kp.m-team.cc",
-  "kufei.org",
-  "leaves.red",
-  "lemonhd.org",
   "m.douban.com",
-  "monikadesign.uk",
-  "morethantv.me",
   "movie.douban.com",
-  "nanyangpt.com",
-  "nebulance.io",
-  "npupt.com",
-  "nzbs.in",
-  "okpt.net",
-  "open.cd",
   "orpheus.network",
-  "oshen.win",
   "ourbits.club",
-  "pandapt.net",
   "passthepopcorn.me",
-  "piggo.me",
-  "privatehd.to",
-  "pt.0ff.cc",
-  "pt.2xfree.org",
-  "pt.btschool.club",
-  "pt.eastgame.org",
-  "pt.gtk.pw",
-  "pt.hd4fans.org",
-  "pt.hdbd.us",
-  "pt.hdpost.top",
-  "pt.hdupt.com",
-  "pt.itzmx.com",
-  "pt.keepfrds.com",
-  "pt.sjtu.edu.cn",
-  "pt.soulvoice.club",
-  "ptcafe.club",
   "ptchdbits.co",
-  "ptchina.org",
-  "pterclub.com",
-  "pthome.net",
-  "ptlsp.com",
-  "ptsbao.club",
-  "pttime.org",
   "redacted.ch",
-  "resource.xidian.edu.cn",
-  "rousi.zip",
+  "redacted.sh",
   "search.douban.com",
-  "secret-cinema.pw",
-  "shadowthein.net",
-  "springsunday.net",
-  "srvfi.top",
-  "tjupt.org",
   "totheglory.im",
-  "tv-vault.me",
-  "ubits.club",
-  "uhdbits.org",
-  "ultrahd.net",
-  "wintersakura.net",
-  "wukongwendao.top",
-  "www.3wmg.com",
-  "www.cinematik.net",
   "www.douban.com",
-  "www.dragonhd.xyz",
-  "www.gamegamept.com",
-  "www.haidan.video",
-  "www.hddolby.com",
-  "www.hitpt.com",
-  "www.htpt.cc",
-  "www.icc2022.com",
   "www.imdb.com",
-  "www.joyhd.net",
-  "www.morethantv.me",
-  "www.okpt.net",
-  "www.oshen.win",
-  "www.pthome.net",
-  "www.ptlsp.com",
-  "www.pttime.org",
-  "www.tjupt.org",
-  "xingtan.one",
-  "xthor.tk",
-  "zhuque.in",
-  "zmk.pw",
-  "zmpt.cc"
+  "zp.m-team.io"
 ];
 
 function autoFeedHostAllowed(url) {
   try {
-    const host = new URL(String(url || '')).hostname.toLowerCase();
+    const host = new URL(String(url || location.href || '')).hostname.toLowerCase();
     return AUTO_FEED_ALLOWED_HOSTS.some((domain) => host === domain || host.endsWith('.' + domain));
   } catch (e) {
     return false;
@@ -431,7 +396,6 @@ function shouldSkipAutoFeedInjectionUrl(url) {
   try {
     const href = String(url || '');
     if (!/^https?:\/\//i.test(href)) return true;
-    if (!autoFeedHostAllowed(href)) return true;
     if (/(?:\.(?:rss|atom|xml)(?:[?#]|$)|\/feed(?:\.(?:rss|xml|atom))?(?:[?#]|$))/i.test(href)) return true;
   } catch (e) {
     return true;
@@ -515,6 +479,120 @@ async function injectAutoFeed(sender, href) {
   return true;
 }
 
+function normalizeTransmissionRpcUrl(url) {
+  url = String(url || '').trim();
+  if (!url) return '';
+  if (!/^https?:\/\//i.test(url)) url = 'http://' + url;
+  try {
+    const u = new URL(url);
+    if (!/\/transmission\/rpc\/?$/i.test(u.pathname)) {
+      u.pathname = (u.pathname.replace(/\/+$/, '') || '') + '/transmission/rpc';
+    }
+    return u.href;
+  } catch (e) {
+    return '';
+  }
+}
+
+function transmissionAuthHeader(username, password) {
+  username = String(username || '');
+  password = String(password || '');
+  if (!username && !password) return '';
+  try { return 'Basic ' + btoa(username + ':' + password); } catch (e) { return ''; }
+}
+
+async function transmissionRpcCall(config, body) {
+  const rpcUrl = normalizeTransmissionRpcUrl(config && config.rpcUrl);
+  if (!rpcUrl) throw new Error('Transmission RPC 地址无效');
+  const headers = { 'Content-Type': 'application/json' };
+  const auth = transmissionAuthHeader(config.username, config.password);
+  if (auth) headers.Authorization = auth;
+  const doFetch = async () => {
+    try {
+      return await fetch(rpcUrl, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(body),
+        credentials: 'include',
+        redirect: 'follow'
+      });
+    } catch (e) {
+      throw new Error('无法连接 Transmission RPC：' + (e && e.message ? e.message : String(e)) + '。请检查地址是否可访问、远程访问/白名单是否开启、端口是否正确。');
+    }
+  };
+  let res = await doFetch();
+  if (res.status === 409) {
+    const sid = res.headers.get('X-Transmission-Session-Id');
+    if (!sid) throw new Error('Transmission 返回 409，但没有 Session ID');
+    headers['X-Transmission-Session-Id'] = sid;
+    res = await doFetch();
+  }
+  const text = await res.text();
+  if (!res.ok) throw new Error('Transmission RPC HTTP ' + res.status + ': ' + text.slice(0, 200));
+  let json = null;
+  try { json = JSON.parse(text); } catch (e) { throw new Error('Transmission RPC 返回不是 JSON: ' + text.slice(0, 200)); }
+  if (json.result && json.result !== 'success') throw new Error(json.result);
+  return json;
+}
+
+async function testTransmissionRpc(payload) {
+  const json = await transmissionRpcCall(payload || {}, { method: 'session-get', arguments: {} });
+  const args = json && json.arguments || {};
+  return { version: args.version || '', rpcVersion: args['rpc-version'] || '' };
+}
+
+function bytesToBase64(bytes) {
+  let binary = '';
+  const chunk = 0x8000;
+  for (let i = 0; i < bytes.length; i += chunk) {
+    binary += String.fromCharCode.apply(null, bytes.subarray(i, i + chunk));
+  }
+  return btoa(binary);
+}
+
+async function fetchTorrentAsBase64(url) {
+  if (!/^https?:\/\//i.test(String(url || ''))) throw new Error('torrent 下载链接无效');
+  const res = await fetch(url, { method:'GET', credentials:'include', redirect:'follow' });
+  if (!res.ok) throw new Error('下载 torrent 失败：HTTP ' + res.status);
+  const buf = await res.arrayBuffer();
+  if (!buf || buf.byteLength < 16) throw new Error('下载到的 torrent 文件为空或无效');
+  return bytesToBase64(new Uint8Array(buf));
+}
+
+async function addTorrentToTransmission(payload) {
+  const store = await chrome.storage.local.get([
+    '__popcorn_tm_enabled',
+    '__popcorn_tm_rpc_lan',
+    '__popcorn_tm_rpc_wan',
+    '__popcorn_tm_rpc_mode',
+    '__popcorn_tm_username',
+    '__popcorn_tm_password',
+    '__popcorn_tm_download_dir',
+    '__popcorn_tm_movie_dir',
+    '__popcorn_tm_tv_dir'
+  ]);
+  if (!store.__popcorn_tm_enabled) throw new Error('Transmission 推送未启用');
+  const mode = store.__popcorn_tm_rpc_mode === 'wan' ? 'wan' : 'lan';
+  const rpcUrl = mode === 'wan' ? store.__popcorn_tm_rpc_wan : store.__popcorn_tm_rpc_lan;
+  const metainfo = await fetchTorrentAsBase64(payload && payload.torrentUrl);
+  const args = { metainfo };
+  const target = payload && payload.target === 'tv' ? 'tv' : 'movie';
+  const legacyDir = String(store.__popcorn_tm_download_dir || '').trim();
+  const movieDir = String(store.__popcorn_tm_movie_dir || legacyDir || '').trim();
+  const tvDir = String(store.__popcorn_tm_tv_dir || '').trim();
+  const dir = target === 'tv' ? tvDir : movieDir;
+  if (dir) args['download-dir'] = dir;
+  const json = await transmissionRpcCall({
+    rpcUrl,
+    username: store.__popcorn_tm_username,
+    password: store.__popcorn_tm_password
+  }, { method:'torrent-add', arguments: args });
+  const a = json.arguments || {};
+  if (a['torrent-duplicate']) return { status:'duplicate', name:a['torrent-duplicate'].name || '' };
+  if (a['torrent-added']) return { status:'added', name:a['torrent-added'].name || '' };
+  return { status:'success' };
+}
+
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   (async () => {
     if (!msg || !msg.type) return { ok:false, error:'missing message type' };
@@ -573,6 +651,16 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
 
     if (msg.type === 'clipboard') {
       return { ok:false, error:'Clipboard fallback not available in MV3 service worker.' };
+    }
+
+    if (msg.type === 'transmission_test') {
+      const result = await testTransmissionRpc(msg.payload || {});
+      return { ok:true, data:result };
+    }
+
+    if (msg.type === 'transmission_add') {
+      const result = await addTorrentToTransmission(msg.payload || {});
+      return { ok:true, data:result };
     }
 
     if (msg.type === 'run_keepalive') {

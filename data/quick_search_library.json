@@ -1,13 +1,28 @@
 [
   {
-    "name": "PTP",
-    "href": "https://passthepopcorn.me/torrents.php?searchstr={imdbid}",
-    "html": "<a href=\"https://passthepopcorn.me/torrents.php?searchstr={imdbid}\" target=\"_blank\">PTP</a>"
+    "name": "Audiences",
+    "href": "https://audiences.me/torrents.php?cat401=1&cat402=1&cat403=1&incldead=0&spstate=0&inclbookmarked=0&search={imdbid}&search_area=4",
+    "html": "<a href=\"https://audiences.me/torrents.php?cat401=1&cat402=1&cat403=1&incldead=0&spstate=0&inclbookmarked=0&search={imdbid}&search_area=4\" target=\"_blank\">Audiences</a>"
+  },
+  {
+    "name": "BHD",
+    "href": "https://beyond-hd.me/torrents?search={imdbid}",
+    "html": "<a href=\"https://beyond-hd.me/torrents?search={imdbid}\" target=\"_blank\">BHD</a>"
   },
   {
     "name": "BTN",
     "href": "https://broadcasthe.net/torrents.php?action=advanced&searchstr=&searchtags=&tags_type=1&groupdesc=&imdbid={imdbid}",
     "html": "<a href=\"https://broadcasthe.net/torrents.php?action=advanced&searchstr=&searchtags=&tags_type=1&groupdesc=&imdbid={imdbid}\" target=\"_blank\">BTN</a>"
+  },
+  {
+    "name": "CHDBits",
+    "href": "https://ptchdbits.co/torrents.php?incldead=0&spstate=0&inclbookmarked=0&search={imdbid}&search_area=4&search_mode=0",
+    "html": "<a href=\"https://ptchdbits.co/torrents.php?incldead=0&spstate=0&inclbookmarked=0&search={imdbid}&search_area=4&search_mode=0\" target=\"_blank\">CHDBits</a>"
+  },
+  {
+    "name": "GPW",
+    "href": "https://greatposterwall.com/torrents.php?searchstr={imdbid}",
+    "html": "<a href=\"https://greatposterwall.com/torrents.php?searchstr={imdbid}\" target=\"_blank\">GPW</a>"
   },
   {
     "name": "HDB",
@@ -20,129 +35,34 @@
     "html": "<a href=\"https://karagarga.in/browse.php?search={imdbid}&search_type=imdb\" target=\"_blank\">KG</a>"
   },
   {
-    "name": "CG",
-    "href": "http://cinemageddon.net/browse.php?search={imdbid}&proj=0&descr=1",
-    "html": "<a href=\"http://cinemageddon.net/browse.php?search={imdbid}&proj=0&descr=1\" target=\"_blank\">CG</a>"
-  },
-  {
-    "name": "BHD",
-    "href": "https://beyond-hd.me/torrents?search={imdbid}",
-    "html": "<a href=\"https://beyond-hd.me/torrents?search={imdbid}\" target=\"_blank\">BHD</a>"
-  },
-  {
-    "name": "BLU",
-    "href": "https://blutopia.xyz/torrents?imdbid={imdbno}&perPage=25&imdbId={imdbno}",
-    "html": "<a href=\"https://blutopia.xyz/torrents?imdbid={imdbno}&perPage=25&imdbId={imdbno}\" target=\"_blank\">BLU</a>"
-  },
-  {
-    "name": "FileList",
-    "href": "https://filelist.io/browse.php?search={imdbid}",
-    "html": "<a href=\"https://filelist.io/browse.php?search={imdbid}\" target=\"_blank\">FileList</a>"
-  },
-  {
-    "name": "AVZ",
-    "href": "https://avistaz.to/torrents?in=1&search={search_name}",
-    "html": "<a href=\"https://avistaz.to/torrents?in=1&search={search_name}\" target=\"_blank\">AVZ</a>"
-  },
-  {
-    "name": "PHD",
-    "href": "https://privatehd.to/torrents?in=1&search={search_name}",
-    "html": "<a href=\"https://privatehd.to/torrents?in=1&search={search_name}\" target=\"_blank\">PHD</a>"
-  },
-  {
-    "name": "HDPost",
-    "href": "https://pt.hdpost.top/torrents?imdbId={imdbid}#page/1",
-    "html": "<a href=\"https://pt.hdpost.top/torrents?imdbId={imdbid}#page/1\" target=\"_blank\">HDPost</a>"
-  },
-  {
-    "name": "xTHOR",
-    "href": "https://xthor.tk/browse.php?sch={search_name}",
-    "html": "<a href=\"https://xthor.tk/browse.php?sch={search_name}\" target=\"_blank\">xTHOR</a>"
-  },
-  {
-    "name": "Tik",
-    "href": "https://www.cinematik.net/browse.php?support=dvd%7Cbd&incldead=0&search={imdbid}&srchdtls=1",
-    "html": "<a href=\"https://www.cinematik.net/browse.php?support=dvd%7Cbd&incldead=0&search={imdbid}&srchdtls=1\" target=\"_blank\">Tik</a>"
-  },
-  {
-    "name": "UHD",
-    "href": "https://uhdbits.org/torrents.php?searchstr={imdbid}",
-    "html": "<a href=\"https://uhdbits.org/torrents.php?searchstr={imdbid}\" target=\"_blank\">UHD</a>"
-  },
-  {
-    "name": "Lemon",
-    "href": "https://lemonhd.org/torrents.php?search={imdbid}&search_area=imdb&suggest=4",
-    "html": "<a href=\"https://lemonhd.org/torrents.php?search={imdbid}&search_area=imdb&suggest=4\" target=\"_blank\">Lemon</a>"
-  },
-  {
-    "name": "CHD",
-    "href": "https://ptchdbits.co/torrents.php?incldead=0&spstate=0&inclbookmarked=0&search={imdbid}&search_area=4&search_mode=0",
-    "html": "<a href=\"https://ptchdbits.co/torrents.php?incldead=0&spstate=0&inclbookmarked=0&search={imdbid}&search_area=4&search_mode=0\" target=\"_blank\">CHD</a>"
-  },
-  {
-    "name": "CMCT",
-    "href": "https://springsunday.net/torrents.php?search={imdbid}&search_area=4&search_mode=0",
-    "html": "<a href=\"https://springsunday.net/torrents.php?search={imdbid}&search_area=4&search_mode=0\" target=\"_blank\">CMCT</a>"
-  },
-  {
-    "name": "HDSky",
-    "href": "https://hdsky.me/torrents.php?search={imdbid}&search_area=4&search_mode=0",
-    "html": "<a href=\"https://hdsky.me/torrents.php?search={imdbid}&search_area=4&search_mode=0\" target=\"_blank\">HDSky</a>"
-  },
-  {
-    "name": "Douban",
-    "href": "https://search.douban.com/movie/subject_search?search_text={imdbid}&cat=1002",
-    "html": "<a href=\"https://search.douban.com/movie/subject_search?search_text={imdbid}&cat=1002\" target=\"_blank\">豆瓣</a>"
-  },
-  {
-    "name": "IMDB",
-    "href": "https://www.imdb.com/title/{imdbid}/",
-    "html": "<a href=\"https://www.imdb.com/title/{imdbid}/\" target=\"_blank\">IMDB</a>"
-  },
-  {
-    "name": "HUDBT",
-    "href": "https://hudbt.hust.edu.cn/torrents.php?inclbookmarked=0&search_area=4&incldead=1&search={imdbid}",
-    "html": "<a href=\"https://hudbt.hust.edu.cn/torrents.php?inclbookmarked=0&search_area=4&incldead=1&search={imdbid}\" target=\"_blank\">HUDBT</a>"
-  },
-  {
-    "name": "ADE",
-    "href": "https://audiences.me/torrents.php?cat401=1&cat402=1&cat403=1&incldead=0&spstate=0&inclbookmarked=0&search={imdbid}&search_area=4",
-    "html": "<a href=\"https://audiences.me/torrents.php?cat401=1&cat402=1&cat403=1&incldead=0&spstate=0&inclbookmarked=0&search={imdbid}&search_area=4\" target=\"_blank\">ADE</a>"
-  },
-  {
-    "name": "ZMK",
-    "href": "http://zmk.pw/search?q={search_name}",
-    "html": "<a href=\"http://zmk.pw/search?q={search_name}\" target=\"_blank\">ZMK</a>"
-  },
-  {
-    "name": "SSW",
-    "href": "https://assrt.net/sub/?searchword={search_name}",
-    "html": "<a href=\"https://assrt.net/sub/?searchword={search_name}\" target=\"_blank\">SSW</a>"
-  },
-  {
-    "name": "IN",
-    "href": "https://nzbs.in/movies?imdb={imdbno}",
-    "html": "<a href=\"https://nzbs.in/movies?imdb={imdbno}\" target=\"_blank\">IN</a>"
-  },
-  {
-    "name": "GPW",
-    "href": "https://greatposterwall.com/torrents.php?searchstr={imdbid}",
-    "html": "<a href=\"https://greatposterwall.com/torrents.php?searchstr={imdbid}\" target=\"_blank\">GPW</a>"
-  },
-  {
-    "name": "FRDS",
-    "href": "https://pt.keepfrds.com/torrents.php?incldead=0&spstate=0&inclbookmarked=0&search={imdbid}&search_area=4&search_mode=0",
-    "html": "<a href=\"https://pt.keepfrds.com/torrents.php?incldead=0&spstate=0&inclbookmarked=0&search={imdbid}&search_area=4&search_mode=0\" target=\"_blank\">FRDS</a>"
-  },
-  {
-    "name": "TTG",
-    "href": "https://totheglory.im/browse.php?search_field={imdbid}",
-    "html": "<a href=\"https://totheglory.im/browse.php?search_field={imdbid}\" target=\"_blank\">TTG</a>"
-  },
-  {
     "name": "MTeam",
     "href": "https://kp.m-team.cc/torrents.php?search={imdbid}",
     "html": "<a href=\"https://kp.m-team.cc/torrents.php?search={imdbid}\" target=\"_blank\">MTeam</a>"
+  },
+  {
+    "name": "OPS",
+    "href": "https://orpheus.network/torrents.php?searchstr={search_name}",
+    "html": "<a href=\"https://orpheus.network/torrents.php?searchstr={search_name}\" target=\"_blank\">OPS</a>"
+  },
+  {
+    "name": "OurBits",
+    "href": "https://ourbits.club/torrents.php?search={imdbid}",
+    "html": "<a href=\"https://ourbits.club/torrents.php?search={imdbid}\" target=\"_blank\">OurBits</a>"
+  },
+  {
+    "name": "PTP",
+    "href": "https://passthepopcorn.me/torrents.php?searchstr={imdbid}",
+    "html": "<a href=\"https://passthepopcorn.me/torrents.php?searchstr={imdbid}\" target=\"_blank\">PTP</a>"
+  },
+  {
+    "name": "RED",
+    "href": "https://redacted.sh/torrents.php?searchstr={search_name}",
+    "html": "<a href=\"https://redacted.sh/torrents.php?searchstr={search_name}\" target=\"_blank\">RED</a>"
+  },
+  {
+    "name": "TTG",
+    "href": "https://totheglory.im/browse.php?search_field=imdb{imdbno}&c=M",
+    "html": "<a href=\"https://totheglory.im/browse.php?search_field=imdb{imdbno}&c=M\" target=\"_blank\">TTG</a>"
   },
   {
     "name": "豆瓣",

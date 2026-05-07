@@ -47,6 +47,10 @@
     <h2>从内置网站库添加</h2>
     <p class="muted small">输入站点名搜索并新增。下面的高级编辑区每行一个链接，支持原脚本里的 <code>{imdbid}</code> / <code>{imdbno}</code> / <code>{search_name}</code> 占位符。</p>
     <div class="quick-add"><label>从内置网站库添加：<input id="quick_search_pick" list="quick_search_library" placeholder="输入站点名搜索，例如 CHD、ADE、BTN、豆瓣"></label><datalist id="quick_search_library"></datalist><button id="add_quick_search">新增</button><span id="quick_search_preview" class="muted small"></span></div>
+
+    <h2>手动添加到当前快捷搜索</h2>
+    <p class="muted small">可手动添加站点名和搜索网址；网址支持 <code>{imdbid}</code> / <code>{imdbno}</code> / <code>{search_name}</code>。添加后会加入当前快捷搜索列表，并保存在你的自定义库中。</p>
+    <div class="quick-add manual-add"><label>网站名：<input id="manual_quick_name" placeholder="例如 MySite"></label><label>搜索网址：<input id="manual_quick_url" placeholder="https://example.com/search?q={imdbid}"></label><button id="add_manual_quick_search">手动新增</button></div>
     <textarea id="used_search_list" spellcheck="false"></textarea>
   </section>
 
@@ -74,7 +78,6 @@
     <div class="form-grid">
       <label>TMDB apikey<input id="used_tmdb_key"></label>
       <label>PTPimg apikey<input id="used_ptp_img_key"></label>
-      <label>TorrentLeech rsskey<input id="used_tl_rss_key"></label>
     </div>
     <div id="rehost_keys" class="form-grid"></div>
 
@@ -84,15 +87,44 @@
     <h2>外站 API 选项</h2>
     <div class="radio-row"><b>IMDb 到豆瓣：</b><label><input type="radio" name="imdb2db" value="0">豆瓣API</label><label><input type="radio" name="imdb2db" value="1">豆瓣爬取</label></div>
     <div class="radio-row"><b>PTGen API 节点：</b><label><input type="radio" name="ptgen" value="0">api.iyuu.cn</label><label><input type="radio" name="ptgen" value="1">ptgen</label><label><input type="radio" name="ptgen" value="3">豆瓣页面爬取</label></div>
-    <div class="radio-row"><b>TorrentLeech 域名：</b><label><input type="radio" name="tldomain" value="0">torrentleech.org</label><label><input type="radio" name="tldomain" value="1">torrentleech.me</label><label><input type="radio" name="tldomain" value="2">torrentleech.cc</label><label><input type="radio" name="tldomain" value="3">tlgetin.cc</label></div>
+
+
+
+    <h2>Transmission 推送</h2>
+    <p class="muted small">在已勾选站点的种子列表 [DL] 左边显示 TM / TV，点击后分别推送到电影路径 / 剧集路径。配置默认只读，点击“修改”后才能编辑，保存后生效。</p>
+    <div class="tm-panel">
+      <div class="stack">
+        <label><input type="checkbox" id="tm_enabled" disabled> 启用 Transmission 推送</label>
+      </div>
+      <div class="form-grid tm-config-grid">
+        <label>局域网 RPC 地址<input id="tm_rpc_lan" placeholder="http://192.168.31.6:9091" disabled></label>
+        <label>外网 RPC 地址<input id="tm_rpc_wan" placeholder="http://byilrq.iok.la:9091" disabled></label>
+        <label>使用地址<select id="tm_rpc_mode" disabled><option value="lan">局域网</option><option value="wan">外网</option></select></label>
+        <label>电影保存路径<input id="tm_movie_dir" placeholder="例如 /mv" disabled></label>
+        <label>剧集保存路径<input id="tm_tv_dir" placeholder="例如 /tv" disabled></label>
+        <label>用户名<input id="tm_username" autocomplete="username" disabled></label>
+        <label>密码<input id="tm_password" type="password" autocomplete="current-password" disabled></label>
+      </div>
+      <div class="row tm-actions">
+        <button id="tm_edit_save" type="button">修改</button>
+        <button id="tm_test_lan" type="button">测试局域网</button>
+        <button id="tm_test_wan" type="button">测试外网</button>
+      </div>
+      <p id="tm_status" class="status"></p>
+      <h3>允许显示 [TM] 的站点</h3>
+      <p class="muted small">站点明细由“当前快捷搜索列表”同步。默认勾选 PTP / BTN，之后你手动添加的站点也会出现在这里。</p>
+      <div id="tm_sites" class="chips"></div>
+    </div>
+
+    <h2>暗色背景网站</h2>
+    <p class="muted small">这里的站点明细由“当前快捷搜索列表”自动同步。默认勾选 BHD；如果 BHD 手动切回亮色皮肤，可以在这里取消勾选。之后你添加到快捷搜索列表的站点，也会出现在这里，可自行勾选为暗色背景样式。</p>
+    <div id="dark_background_sites" class="chips"></div>
 
     <h2>其他开关</h2>
     <div class="stack">
       <label><input type="checkbox" id="if_uplver"> 默认匿名发布</label>
       <label><input type="checkbox" id="if_douban_jump"> 显示豆瓣页面跳转选项</label>
       <label><input type="checkbox" id="if_imdb_jump"> 显示 IMDb 页面跳转选项</label>
-      <label><input type="checkbox" id="hdb_hide_douban"> 折叠 HDB 中文豆瓣信息</label>
-      <label><input type="checkbox" id="chd_use_backup_url"> 使用 CHD 备份网址</label>
       <label><input type="checkbox" id="nhd_use_v6_url"> 使用 NexusHD IPv6 网址</label>
     </div>
   </section>
