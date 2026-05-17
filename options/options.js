@@ -7,10 +7,10 @@ let customQuickSearchLibrary = [];
 
 const QUICK_DEFAULT_KEYS = ['PTP','BHD','CHD','ADE','GPW','BTN','豆瓣'];
 const QUICK_SITE_KEY_MAP = { PTP:'PTP', BHD:'BHD', CHD:'CHD', ADE:'ADE', GPW:'GPW', BTN:'BTN', '豆瓣':'豆瓣', Douban:'豆瓣' };
-const DEFAULT_SERIES_SEARCH_SITES = ['BHD','BTN'];
+const DEFAULT_SERIES_SEARCH_SITES = ['BHD','BTN','ADE'];
 const DEFAULT_DARK_BACKGROUND_SITES = ['BHD'];
-const DEFAULT_TRANSMISSION_SITES = ['PTP','BTN'];
-const FORWARD_SITE_ALLOWLIST = ['Audiences','BHD','BTN','CHDBits','GPW','HDB','KG','MTeam','OPS','OurBits','PTP','RED','TTG'];
+const DEFAULT_TRANSMISSION_SITES = ['PTP','BHD','CHD','ADE','GPW','BTN'];
+const FORWARD_SITE_ALLOWLIST = ['Audiences','BHD','BTN','CHDBits','GPW','MTeam','OPS','OurBits','PTP','RED','TTG'];
 function isForwardSettingSite(k){ return FORWARD_SITE_ALLOWLIST.includes(k); }
 function seriesKeyFromHtml(html){
   const known = quickSiteKeyFromHtml(html);
@@ -74,7 +74,7 @@ function mergeQuickLibraries(base, custom){
   });
   return out;
 }
-const LEGACY_QUICK_KEYS = ['PTP','BHD','GPW','BLU','TTG','MTeam','KG'];
+const LEGACY_QUICK_KEYS = ['PTP','BHD','GPW'];
 function normalizeSearchList(lines){
   const list = (Array.isArray(lines) ? lines : []).map(x => String(x || '').trim()).filter(Boolean);
   const keys = list.map(quickKeyFromHtml).filter(Boolean);
@@ -202,14 +202,14 @@ function defaultsState(data){
   const parsedTmSites = rawTmSites === undefined ? DEFAULT_TRANSMISSION_SITES : parseCsvJson(rawTmSites, []);
   const tmSites = normalizeTransmissionSites(parsedTmSites, searchList);
   const tmConfig = {
-    enabled: !!num(data.__popcorn_tm_enabled, 0),
-    rpcLan: data.__popcorn_tm_rpc_lan || '',
-    rpcWan: data.__popcorn_tm_rpc_wan || '',
-    rpcMode: data.__popcorn_tm_rpc_mode || 'lan',
+    enabled: data.__popcorn_tm_enabled === undefined ? true : !!num(data.__popcorn_tm_enabled, 1),
+    rpcLan: data.__popcorn_tm_rpc_lan || 'http://192.168.31.6:9091',
+    rpcWan: data.__popcorn_tm_rpc_wan || 'http://域名:9091',
+    rpcMode: data.__popcorn_tm_rpc_mode || 'wan',
     username: data.__popcorn_tm_username || '',
     password: data.__popcorn_tm_password || '',
-    movieDir: data.__popcorn_tm_movie_dir || data.__popcorn_tm_download_dir || '',
-    tvDir: data.__popcorn_tm_tv_dir || ''
+    movieDir: data.__popcorn_tm_movie_dir || data.__popcorn_tm_download_dir || '/mv',
+    tvDir: data.__popcorn_tm_tv_dir || '/tv'
   };
   return { usedSiteInfo, siteOrder, common, showSearch, extra, rehost, searchList, hidden, signinSites, seriesSites, darkSites, tmSites, tmConfig };
 }
@@ -255,17 +255,16 @@ function renderTransmissionSites(st){
 function setTransmissionEditing(editing){
   const panel = document.querySelector('.tm-panel');
   if (panel) panel.classList.toggle('editing', !!editing);
-  ['tm_enabled','tm_rpc_lan','tm_rpc_wan','tm_rpc_mode','tm_movie_dir','tm_tv_dir','tm_username','tm_password'].forEach(id => { const el=$(id); if (el) el.disabled = !editing; });
+  ['tm_rpc_lan','tm_rpc_wan','tm_rpc_mode','tm_movie_dir','tm_tv_dir','tm_username','tm_password'].forEach(id => { const el=$(id); if (el) el.disabled = !editing; });
   const btn = $('tm_edit_save');
   if (btn) { btn.textContent = editing ? '保存' : '修改'; btn.dataset.editing = editing ? '1' : '0'; }
 }
 function renderTransmissionConfig(st){
   const cfg = st.tmConfig || {};
-  if (!$('tm_enabled')) return;
-  $('tm_enabled').checked = !!cfg.enabled;
+  if (!$('tm_rpc_mode')) return;
   $('tm_rpc_lan').value = cfg.rpcLan || '';
   $('tm_rpc_wan').value = cfg.rpcWan || '';
-  $('tm_rpc_mode').value = cfg.rpcMode === 'wan' ? 'wan' : 'lan';
+  $('tm_rpc_mode').value = cfg.rpcMode === 'lan' ? 'lan' : 'wan';
   $('tm_username').value = cfg.username || '';
   $('tm_password').value = cfg.password || '';
   $('tm_movie_dir').value = cfg.movieDir || '';
@@ -294,8 +293,8 @@ function renderSignin(st){
 function renderFromData(data){
   current = data || {};
   const st = defaultsState(current);
-  $('used_tmdb_key').value = current.used_tmdb_key ?? '0f79586eb9d92afa2b7266f7928b055c';
-  $('used_ptp_img_key').value = current.used_ptp_img_key ?? '';
+  if ($('used_tmdb_key')) $('used_tmdb_key').value = current.used_tmdb_key ?? '';
+  if ($('used_ptp_img_key')) $('used_ptp_img_key').value = current.used_ptp_img_key ?? '';
   $('if_uplver').checked = !!num(current.if_uplver, 1);
   $('if_douban_jump').checked = !!num(current.if_douban_jump, 1);
   $('if_imdb_jump').checked = !!num(current.if_imdb_jump, 1);
@@ -305,8 +304,8 @@ function renderFromData(data){
 
   $('site_grid').innerHTML = st.siteOrder.filter(isForwardSettingSite).map(k=>`<label><input type="checkbox" class="support_site" data-site="${esc(k)}" ${st.usedSiteInfo[k]?.enable ? 'checked':''}><span>${esc(k)}</span></label>`).join('');
   renderQuickToggles(st);
-  $('extra_grid').innerHTML = Object.entries(st.extra).map(([k,v])=>`<label><input type="checkbox" class="extra" data-key="${esc(k)}" ${v.enable ? 'checked':''}>${esc(v.title || k)}</label>`).join('');
-  $('rehost_keys').innerHTML = Object.entries(st.rehost).filter(([k])=>!['catbox','gifyu','pstorage'].includes(k)).map(([k,v])=>`<label>${esc(k)} apikey<input class="rehost_key" data-key="${esc(k)}" value="${esc(v['api-key']||'')}"></label>`).join('');
+  if ($('extra_grid')) $('extra_grid').innerHTML = Object.entries(st.extra).map(([k,v])=>`<label><input type="checkbox" class="extra" data-key="${esc(k)}" ${v.enable ? 'checked':''}>${esc(v.title || k)}</label>`).join('');
+  if ($('rehost_keys')) $('rehost_keys').innerHTML = Object.entries(st.rehost).filter(([k])=>!['catbox','gifyu','pstorage'].includes(k)).map(([k,v])=>`<label>${esc(k)} apikey<input class="rehost_key" data-key="${esc(k)}" value="${esc(v['api-key']||'')}"></label>`).join('');
   $('used_search_list').value = st.searchList.join('\n');
   renderQuickSelected(st);
   renderSeriesSearchSites(st);
@@ -367,10 +366,10 @@ function collect(){
   data.show_search_urls = JSON.stringify(showSearch);
   data.extra_settings = JSON.stringify(extra);
   data.used_search_list = stringifyCsv($('used_search_list').value.split('\n').map(s=>s.trim()).filter(Boolean));
-  data.used_tmdb_key = $('used_tmdb_key').value.trim();
-  data.used_ptp_img_key = $('used_ptp_img_key').value.trim();
+  data.used_tmdb_key = $('used_tmdb_key') ? $('used_tmdb_key').value.trim() : '';
+  data.used_ptp_img_key = $('used_ptp_img_key') ? $('used_ptp_img_key').value.trim() : '';
   data.imdb2db_chosen = getRadio('imdb2db', '0');
-  data.api_chosen = getRadio('ptgen', '3');
+  data.api_chosen = '3';
   data.if_uplver = $('if_uplver').checked ? 1 : 0;
   data.if_douban_jump = $('if_douban_jump').checked ? 1 : 0;
   data.if_imdb_jump = $('if_imdb_jump').checked ? 1 : 0;
@@ -383,10 +382,10 @@ function collect(){
   data.__popcorn_series_search_sites = stringifyCsv(seriesSites);
   data.__popcorn_dark_background_sites = stringifyCsv(darkSites);
   data.__popcorn_tm_sites = stringifyCsv(tmSites);
-  data.__popcorn_tm_enabled = $('tm_enabled') && $('tm_enabled').checked ? 1 : 0;
+  data.__popcorn_tm_enabled = 1;
   data.__popcorn_tm_rpc_lan = $('tm_rpc_lan') ? $('tm_rpc_lan').value.trim() : '';
   data.__popcorn_tm_rpc_wan = $('tm_rpc_wan') ? $('tm_rpc_wan').value.trim() : '';
-  data.__popcorn_tm_rpc_mode = $('tm_rpc_mode') ? $('tm_rpc_mode').value : 'lan';
+  data.__popcorn_tm_rpc_mode = $('tm_rpc_mode') ? $('tm_rpc_mode').value : 'wan';
   data.__popcorn_tm_username = $('tm_username') ? $('tm_username').value.trim() : '';
   data.__popcorn_tm_password = $('tm_password') ? $('tm_password').value : '';
   data.__popcorn_tm_movie_dir = $('tm_movie_dir') ? $('tm_movie_dir').value.trim() : '';
@@ -510,10 +509,10 @@ if ($('add_manual_quick_search')) $('add_manual_quick_search').onclick = async (
 async function saveTransmissionConfigOnly(){
   const data = collect();
   await chrome.storage.local.set({
-    __popcorn_tm_enabled: data.__popcorn_tm_enabled,
+    __popcorn_tm_enabled: 1,
     __popcorn_tm_rpc_lan: data.__popcorn_tm_rpc_lan,
     __popcorn_tm_rpc_wan: data.__popcorn_tm_rpc_wan,
-    __popcorn_tm_rpc_mode: data.__popcorn_tm_rpc_mode,
+    __popcorn_tm_rpc_mode: data.__popcorn_tm_rpc_mode || 'wan',
     __popcorn_tm_username: data.__popcorn_tm_username,
     __popcorn_tm_password: data.__popcorn_tm_password,
     __popcorn_tm_download_dir: data.__popcorn_tm_download_dir,

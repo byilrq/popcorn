@@ -1209,8 +1209,6 @@
     if (host.includes('ptchdbits.co') || host.includes('chdbits') || host.includes('chddiy')) keys.add('CHD');
     if (host.includes('audiences.me')) keys.add('ADE');
     if (host.includes('greatposterwall.com')) keys.add('GPW');
-    if (host.includes('hdbits.org')) keys.add('HDB');
-    if (host.includes('karagarga.in')) keys.add('KG');
     if (host.includes('m-team') || host.includes('m-team.cc')) keys.add('MTeam');
     if (host.includes('orpheus.network')) keys.add('OPS');
     if (host.includes('ourbits.club')) keys.add('OurBits');
@@ -1231,8 +1229,8 @@
   function transmissionSiteEnabledHere() {
     try {
       if (typeof GM_getValue === 'function' && Number(GM_getValue('__popcorn_tm_enabled', 0)) !== 1) return false;
-      const picked = tmParseCsv(typeof GM_getValue === 'function' ? GM_getValue('__popcorn_tm_sites', '') : '', ['PTP','BTN']);
-      const pickedSet = new Set((picked.length ? picked : ['PTP','BTN']).map(String));
+      const picked = tmParseCsv(typeof GM_getValue === 'function' ? GM_getValue('__popcorn_tm_sites', '') : '', ['PTP','BHD','CHD','ADE','GPW','BTN']);
+      const pickedSet = new Set((picked.length ? picked : ['PTP','BHD','CHD','ADE','GPW','BTN']).map(String));
       const here = tmCurrentSiteKeys();
       for (const k of here) if (pickedSet.has(k)) return true;
     } catch (_) {}

@@ -130,7 +130,7 @@
       document.querySelectorAll('a[href*="tt"]').forEach(a => {
         if (isChdAnchor(a)) return;
         const text = cleanText(a.textContent || '').toUpperCase();
-        if (!/^(PTP|BHD|BTN|ADE|GPW|HDB|HDT)$/i.test(text)) return;
+        if (!/^(PTP|BHD|BTN|ADE|GPW)$/i.test(text)) return;
         idsFrom(a.href).forEach(id => {
           if (id && id !== original) candidates.push({ id, score: 10 });
         });

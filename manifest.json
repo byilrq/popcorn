@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "Popcorn",
-  "version": "0.74.0",
-  "description": "Popcorn standalone browser extension (v74.0, Transmission movie/TV paths)",
+  "version": "1.0",
+  "description": "Popcorn standalone browser extension (v1.0, Transmission defaults)",
   "icons": {
     "16": "images/icon16.png",
     "32": "images/icon32.png",

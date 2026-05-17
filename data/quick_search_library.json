@@ -25,16 +25,6 @@
     "html": "<a href=\"https://greatposterwall.com/torrents.php?searchstr={imdbid}\" target=\"_blank\">GPW</a>"
   },
   {
-    "name": "HDB",
-    "href": "https://hdbits.org/browse.php?search={imdbid}",
-    "html": "<a href=\"https://hdbits.org/browse.php?search={imdbid}\" target=\"_blank\">HDB</a>"
-  },
-  {
-    "name": "KG",
-    "href": "https://karagarga.in/browse.php?search={imdbid}&search_type=imdb",
-    "html": "<a href=\"https://karagarga.in/browse.php?search={imdbid}&search_type=imdb\" target=\"_blank\">KG</a>"
-  },
-  {
     "name": "MTeam",
     "href": "https://kp.m-team.cc/torrents.php?search={imdbid}",
     "html": "<a href=\"https://kp.m-team.cc/torrents.php?search={imdbid}\" target=\"_blank\">MTeam</a>"

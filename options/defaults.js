@@ -20,14 +20,6 @@ window.AUTO_FEED_DEFAULTS = {
         "url": "https://greatposterwall.com/",
         "enable": 0
     },
-    "HDB": {
-        "url": "https://hdbits.org/",
-        "enable": 0
-    },
-    "KG": {
-        "url": "https://karagarga.in/",
-        "enable": 0
-    },
     "MTeam": {
         "url": "https://kp.m-team.cc/",
         "enable": 0
@@ -69,14 +61,6 @@ window.AUTO_FEED_DEFAULTS = {
     },
     "ptp_show_group_name": {
       "title": "PTP组名",
-      "enable": 1
-    },
-    "hdb_show_douban": {
-      "title": "HDB中文",
-      "enable": 1
-    },
-    "hdb_show_discount_color": {
-      "title": "HDB折扣",
       "enable": 1
     },
     "btn_dark_color": {

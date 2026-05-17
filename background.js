@@ -16,16 +16,9 @@ function normalizeBackup(data) {
   const out = {};
   for (const [k, v] of Object.entries(src || {})) out[k] = decodeTampermonkeyValue(v);
 
-  // Popcorn historically asks for a hosting NP site via prompt and stores it as host_link.
-  // For extension mode, derive it from the backed-up settings so first run can work without prompt.
-  if (!out.host_link) {
-    let list = out.setting_host_list;
-    if (typeof list === 'string') {
-      try { list = JSON.parse(list); } catch { list = null; }
-    }
-    const chosen = out.setting_host;
-    if (list && chosen && list[chosen]) out.host_link = list[chosen];
-  }
+  // Do not derive host_link from setting_host. The legacy backup often says MTeam,
+  // which makes PtGen links jump to MTeam even when the user is browsing PTP.
+  if (out.host_link && String(out.host_link).includes('m-team.cc/usercp.php?action=personal')) delete out.host_link;
   return out;
 }
 
@@ -33,7 +26,7 @@ function normalizeBackup(data) {
 const AUTO_FEED_DEFAULT_QUICK_SEARCH_LIST = ["<a href=\"https://passthepopcorn.me/torrents.php?searchstr={imdbid}\" target=\"_blank\">PTP</a>", "<a href=\"https://beyond-hd.me/torrents?search={imdbid}\" target=\"_blank\">BHD</a>", "<a href=\"https://ptchdbits.co/torrents.php?incldead=0&spstate=0&inclbookmarked=0&search={imdbid}&search_area=4&search_mode=0\" target=\"_blank\">CHD</a>", "<a href=\"https://audiences.me/torrents.php?cat401=1&cat402=1&cat403=1&incldead=0&spstate=0&inclbookmarked=0&search={imdbid}&search_area=4\" target=\"_blank\">ADE</a>", "<a href=\"https://greatposterwall.com/torrents.php?searchstr={imdbid}\" target=\"_blank\">GPW</a>", "<a href=\"https://broadcasthe.net/torrents.php?action=advanced&searchstr=&searchtags=&tags_type=1&groupdesc=&imdbid={imdbid}\" target=\"_blank\">BTN</a>", "<a href=\"https://search.douban.com/movie/subject_search?search_text={imdbid}&cat=1002\" target=\"_blank\">豆瓣</a>"];
 const AUTO_FEED_DEFAULT_QUICK_SEARCH_KEYS = ["PTP", "BHD", "CHD", "ADE", "GPW", "BTN", "豆瓣"];
 
-const AUTO_FEED_CLEAN_SITE_ORDER = ["Audiences", "BHD", "BTN", "CHDBits", "GPW", "HDB", "KG", "MTeam", "OPS", "OurBits", "PTP", "RED", "TTG"];
+const AUTO_FEED_CLEAN_SITE_ORDER = ["Audiences", "BHD", "BTN", "CHDBits", "GPW", "MTeam", "OPS", "OurBits", "PTP", "RED", "TTG"];
 const AUTO_FEED_CLEAN_SITE_INFO = {
   "Audiences": {
     "url": "https://audiences.me/",
@@ -53,14 +46,6 @@ const AUTO_FEED_CLEAN_SITE_INFO = {
   },
   "GPW": {
     "url": "https://greatposterwall.com/",
-    "enable": 0
-  },
-  "HDB": {
-    "url": "https://hdbits.org/",
-    "enable": 0
-  },
-  "KG": {
-    "url": "https://karagarga.in/",
     "enable": 0
   },
   "MTeam": {
@@ -112,7 +97,36 @@ async function cleanupStoredSiteLibrary() {
     console.warn('[Popcorn] could not clean site library:', e);
   }
 }
-const AUTO_FEED_OLD_QUICK_SEARCH_KEYS = ["PTP", "BHD", "GPW", "BLU", "TTG", "MTeam", "KG"];
+const AUTO_FEED_OLD_QUICK_SEARCH_KEYS = ["PTP", "BHD", "GPW"];
+
+const POPCORN_DEFAULT_TM_SITES = 'PTP,BHD,CHD,ADE,GPW,BTN';
+const POPCORN_DEFAULT_SERIES_SITES = 'BHD,BTN,ADE';
+const POPCORN_DEFAULT_TM_CONFIG = {
+  __popcorn_tm_enabled: 1,
+  __popcorn_tm_rpc_lan: 'http://192.168.31.6:9091',
+  __popcorn_tm_rpc_wan: 'http://域名:9091',
+  __popcorn_tm_rpc_mode: 'wan',
+  __popcorn_tm_movie_dir: '/mv',
+  __popcorn_tm_tv_dir: '/tv',
+  __popcorn_tm_download_dir: '/mv'
+};
+
+async function migratePopcornDefaults() {
+  const keys = ['__popcorn_tm_enabled','__popcorn_tm_rpc_lan','__popcorn_tm_rpc_wan','__popcorn_tm_rpc_mode','__popcorn_tm_movie_dir','__popcorn_tm_tv_dir','__popcorn_tm_download_dir','__popcorn_tm_sites','__popcorn_series_search_sites','__popcorn_dark_background_sites'];
+  const data = await chrome.storage.local.get(keys);
+  const updates = {};
+  for (const [k,v] of Object.entries(POPCORN_DEFAULT_TM_CONFIG)) {
+    if (data[k] === undefined || data[k] === null || data[k] === '') updates[k] = v;
+  }
+  if (String(data.__popcorn_tm_rpc_wan || '').includes('byilrq.iok.la')) updates.__popcorn_tm_rpc_wan = POPCORN_DEFAULT_TM_CONFIG.__popcorn_tm_rpc_wan;
+  const tmSites = parseCsvLike(data.__popcorn_tm_sites).join(',');
+  if (!tmSites || tmSites === 'PTP,BTN' || tmSites.includes('豆瓣')) updates.__popcorn_tm_sites = JSON.stringify(POPCORN_DEFAULT_TM_SITES);
+  const seriesSites = parseCsvLike(data.__popcorn_series_search_sites).join(',');
+  if (!seriesSites || seriesSites === 'BHD,BTN') updates.__popcorn_series_search_sites = JSON.stringify(POPCORN_DEFAULT_SERIES_SITES);
+  if (!parseCsvLike(data.__popcorn_dark_background_sites).length) updates.__popcorn_dark_background_sites = JSON.stringify('BHD');
+  if (Object.keys(updates).length) await chrome.storage.local.set(updates);
+}
+
 
 function quickSearchKeyFromHtml(html) {
   const text = String(html || '');
@@ -145,7 +159,8 @@ function normalizeQuickSearchStorageValue(value) {
   const keys = lines.map(quickSearchKeyFromHtml).filter(Boolean);
   const hasNewDefault = AUTO_FEED_DEFAULT_QUICK_SEARCH_KEYS.every(k => keys.includes(k));
   const looksLikeOldDefault = AUTO_FEED_OLD_QUICK_SEARCH_KEYS.every(k => keys.includes(k)) && !keys.includes('CHD') && !keys.includes('ADE') && !keys.includes('BTN') && !keys.includes('豆瓣');
-  if (!lines.length || looksLikeOldDefault) return JSON.stringify(AUTO_FEED_DEFAULT_QUICK_SEARCH_LIST.join(','));
+  const looksLikeBundledLegacyList = lines.length >= 20 && !keys.includes('CHD') && !keys.includes('ADE') && !keys.includes('BTN') && !keys.includes('豆瓣');
+  if (!lines.length || looksLikeOldDefault || looksLikeBundledLegacyList) return JSON.stringify(AUTO_FEED_DEFAULT_QUICK_SEARCH_LIST.join(','));
   return JSON.stringify(lines.map(line => String(line)
     .replace('https://beyond-hd.me/torrents?search={imdbid}', 'https://beyond-hd.me/torrents?search={imdbid}')
     .replace('https://beyond-hd.me/torrents?search={imdbid}', 'https://beyond-hd.me/torrents?search={imdbid}')
@@ -216,9 +231,9 @@ async function importInitialStorage(force = false) {
     const raw = await fetch(url).then(r => r.json());
     const data = disableForwardSitesByDefault(normalizeBackup(raw));
     if (data.show_search_urls !== undefined) data.show_search_urls = normalizeShowSearchStorageValue(data.show_search_urls);
-    await chrome.storage.local.set({ ...data, __auto_feed_imported: true, __auto_feed_version: '0.25.0' });
+    await chrome.storage.local.set({ ...data, __auto_feed_imported: true, __auto_feed_version: '1.0' });
   } catch (e) {
-    await chrome.storage.local.set({ __auto_feed_imported: true, __auto_feed_version: '0.25.0', __auto_feed_import_error: String(e && e.message || e) });
+    await chrome.storage.local.set({ __auto_feed_imported: true, __auto_feed_version: '1.0', __auto_feed_import_error: String(e && e.message || e) });
   }
 }
 
@@ -239,6 +254,7 @@ chrome.runtime.onInstalled.addListener(async (details) => {
   await cleanupStoredSiteLibrary();
   await migrateShowSearchStorage();
   await migrateQuickSearchStorage();
+  await migratePopcornDefaults();
   await maybeOpenOptions(details);
 });
 
@@ -355,9 +371,9 @@ const AUTO_FEED_ALLOWED_HOSTS = [
   "broadcasthe.net",
   "douban.com",
   "greatposterwall.com",
-  "hdbits.org",
+  "removed-hdb.invalid",
   "imdb.com",
-  "karagarga.in",
+  "removed-kg.invalid",
   "kp.m-team.cc",
   "m.douban.com",
   "movie.douban.com",
@@ -561,7 +577,6 @@ async function fetchTorrentAsBase64(url) {
 
 async function addTorrentToTransmission(payload) {
   const store = await chrome.storage.local.get([
-    '__popcorn_tm_enabled',
     '__popcorn_tm_rpc_lan',
     '__popcorn_tm_rpc_wan',
     '__popcorn_tm_rpc_mode',
@@ -571,8 +586,7 @@ async function addTorrentToTransmission(payload) {
     '__popcorn_tm_movie_dir',
     '__popcorn_tm_tv_dir'
   ]);
-  if (!store.__popcorn_tm_enabled) throw new Error('Transmission 推送未启用');
-  const mode = store.__popcorn_tm_rpc_mode === 'wan' ? 'wan' : 'lan';
+  const mode = store.__popcorn_tm_rpc_mode === 'lan' ? 'lan' : 'wan';
   const rpcUrl = mode === 'wan' ? store.__popcorn_tm_rpc_wan : store.__popcorn_tm_rpc_lan;
   const metainfo = await fetchTorrentAsBase64(payload && payload.torrentUrl);
   const args = { metainfo };
