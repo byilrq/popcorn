@@ -1507,7 +1507,7 @@ var raw_info = {
     'region': '', //地区码，unit3d
 };
 
-var no_need_douban_button_sites = ['RED', 'OpenCD', 'lztr', 'DICMusic', 'OPS', 'jpop', 'bib', 'mam', 'SugoiMusic', 'MTeam', 'HHClub', 'SportsCult'];
+var no_need_douban_button_sites = ['PTP', 'RED', 'OpenCD', 'lztr', 'DICMusic', 'OPS', 'jpop', 'bib', 'mam', 'SugoiMusic', 'MTeam', 'HHClub', 'SportsCult'];
 
 Array.prototype.remove = function(val) {
     var index = this.indexOf(val);
@@ -3192,6 +3192,7 @@ function check_label(nodes, value) {
 }
 
 function init_buttons_for_transfer(container, site, mode, raw_info) {
+    if (site == 'PTP') return;
     //imdb框
     var input_box = document.createElement('input');
     input_box.type="text";
@@ -5663,7 +5664,7 @@ if (site_url.match(/^https:\/\/(ptchdbits\.co|[^\/]{1,8}\.chddiy\.xyz)\/(torrent
     auto_feed_add_generic_list_search('CHD', 'tr', ['a[href*="details.php"]', 'a[href*="torrents.php"]', 'td:eq(1)', 'td:eq(2)']);
 }
 
-if (site_url.match(/^https:\/\/audiences\.me\/(torrents|browse)\.php/i)) {
+if (false && site_url.match(/^https:\/\/audiences\.me\/(torrents|browse)\.php/i)) {
     auto_feed_add_generic_list_search('ADE', 'tr', ['a[href*="details.php"]', 'a[href*="torrents.php"]', 'td:eq(1)', 'td:eq(2)']);
 }
 
@@ -13064,16 +13065,7 @@ function auto_feed() {
             try{ raw_info.url = $('a:contains("http://www.imdb.com")').last().text();} catch(err) {}
         }
 
-        forward_r.innerHTML = forward_r.innerHTML + ' <br><br><font color="green">Tools →</font> ';
-
-        var setting_link = document.createElement('a');
-        setting_link.innerHTML = '脚本设置';
-        setting_link.id = 'setting_link';
-        setting_link.title = '打开 Popcorn 设置页。';
-        setting_link.href = host_link+'#setting';
-        setting_link.target = '_blank';
-        forward_r.appendChild(setting_link);
-        // Popcorn: common-sites forwarding shortcut disabled.
+        // Popcorn: browser-extension settings live in the extension options page; no in-page Tools link.
         var search_name = get_search_name(raw_info.name);
         try {
             var imdbid = raw_info.url.match(/tt\d+/i)[0];
@@ -13897,13 +13889,6 @@ function auto_feed() {
             }, false);
         }
 
-        if (origin_site == 'DICMusic') {
-            var html = $('#forward_r').html();
-            html = html.replace(`<font color="green">Tools →</font>`, '<blockquote style="margin-right:200px"><font color="green">Tools →</font>');
-            html = html.replace(`脚本设置</a><br>`, '脚本设置</a></blockquote>');
-            html = html.replace(`查重 `, '查重 <div></div>')
-            $('#forward_r').html(html);
-        }
     }
 
     /*****************************************************************************************************************

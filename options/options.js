@@ -155,6 +155,7 @@ function signinStatusText(x){
   if (x.lastStatus === 'success') return '成功';
   if (x.lastStatus === 'running') return '运行中';
   if (x.lastStatus === 'timeout') return '超时';
+  if (x.lastStatus === 'unauth') return '未登录';
   if (x.lastStatus === 'failed') return '失败';
   return x.lastStatus;
 }
@@ -162,7 +163,7 @@ function signinStatusClass(x){
   const st = x && x.lastStatus;
   if (st === 'success') return 'ok';
   if (st === 'running') return 'running';
-  if (st === 'failed' || st === 'timeout') return 'bad';
+  if (st === 'failed' || st === 'timeout' || st === 'unauth') return 'bad';
   return 'idle';
 }
 function extractAnchorName(html){
@@ -284,7 +285,6 @@ function renderSignin(st){
       <input class="signin-url locked" value="${esc(x.url || '')}" placeholder="https://example.com/" readonly>
       <span class="signin-state ${signinStatusClass(x)}" title="${esc(x.lastError || '')}">${signinStatusText(x)}</span>
       <span class="signin-time">最近成功：${esc(formatSigninTime(x.lastSuccessAt))}</span>
-      <span class="signin-time">下次保活：${esc(formatNextKeepaliveTime(x.lastSuccessAt))}</span>
       <button class="remove-signin" type="button">删除</button>
     </div>`).join('');
   $('signin_sites').innerHTML = rows || '<p class="muted small">还没有添加保活站点。</p>';
@@ -460,7 +460,7 @@ $('run_keepalive_now').onclick=async()=>{
   chrome.runtime.sendMessage({ type:'run_keepalive', payload:{ force:true } }, (resp)=>{
     if (resp && resp.ok) {
       const skipped = resp.data?.skippedCount || 0;
-      setStatus('signin_status', `已访问 ${resp.data?.count || 0} 个站点${skipped ? `，跳过 ${skipped} 个 7 天内已成功站点` : ''}`);
+      setStatus('signin_status', `已打开 ${resp.data?.count || 0} 个站点，已按页面登录状态校验；只有检测到真实登录才会记为成功${skipped ? `，跳过 ${skipped} 个 7 天内已成功站点` : ''}`);
       load();
     } else setStatus('signin_status', '执行失败：' + (resp && resp.error || '未知错误'), true);
   });

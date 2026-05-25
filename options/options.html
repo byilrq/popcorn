@@ -11,7 +11,6 @@
   <header class="hero">
     <div>
       <h1>Popcorn</h1>
-      <p class="muted">独立扩展设置页。保存后刷新目标 PT 页面即可生效。</p>
     </div>
     <div class="top-actions">
       <button id="reload">刷新</button>
@@ -57,7 +56,7 @@
 
   <section class="card tab-panel" id="tab-signin">
     <h2>签到 / 登录保活</h2>
-    <p class="muted small">这里做扩展版的基础保活：浏览器启动后会自动后台访问你添加的站点首页，尽量刷新登录状态。每个站点最近 7 天内成功访问过就不会重复自动访问；超过 7 天后才会再次保活。遇到验证码、二次验证或站点强制登录时，仍需要你手动处理。</p>
+    <p class="muted small">这里做扩展版的基础保活：浏览器启动后会自动后台访问你添加的站点首页，并校验页面是否已经真实登录；只有检测到退出登录、用户中心、收件箱、分享率/上传量等已登录特征时才会记为成功。每个站点最近 7 天内成功保活过就不会重复自动访问；遇到验证码、二次验证或站点强制登录时，仍需要你手动处理。</p>
     <div class="stack">
       <label><input type="checkbox" id="keepalive_enabled"> 开启每周一次自动登录保活</label>
       <label><input type="checkbox" id="keepalive_autoclose"> 访问后自动关闭后台标签页</label>

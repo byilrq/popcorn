@@ -11,3 +11,14 @@
 
 
 .tm-panel{border:1px solid var(--line);border-radius:14px;padding:14px;background:#fbfdff;margin:10px 0 18px}.tm-panel h3{font-size:15px;margin:14px 0 8px}.tm-actions button,.tm-panel button{border:1px solid var(--line);background:#fff;border-radius:10px;padding:8px 12px;cursor:pointer}.tm-config-grid select{width:100%;margin-top:4px;padding:8px;border:1px solid var(--line);border-radius:8px;background:#fff}.tm-panel input:disabled,.tm-panel select:disabled{background:#f1f5f9;color:#64748b;cursor:not-allowed}.tm-panel.editing{background:#f8fbff;border-color:#93c5fd}.popcorn-tm-btn{font-weight:700;cursor:pointer;text-decoration:none}.popcorn-tm-btn.is-working{opacity:.7}.popcorn-tm-btn.is-ok{color:#047857!important}.popcorn-tm-btn.is-bad{color:#b91c1c!important}
+
+
+/* 签到保活：每个站点保持单行，缩短站点名/网址输入框，并把删除按钮放到原“下次保活”位置 */
+.signin-add input#signin_name{min-width:140px;width:160px}
+.signin-add input#signin_url{min-width:280px;width:380px;flex:0 1 380px}
+.signin-row{grid-template-columns:68px 130px minmax(260px,1fr) 76px minmax(170px,190px) 80px;gap:8px;align-items:center}
+.signin-row .signin-name{width:130px;min-width:0}
+.signin-row .signin-url{width:100%;min-width:0}
+.signin-row .signin-time{white-space:nowrap}
+.signin-row .remove-signin{justify-self:start}
+@media(max-width:900px){.signin-add input#signin_name,.signin-add input#signin_url{width:100%;min-width:0;flex:1 1 100%}.signin-row{grid-template-columns:1fr}.signin-row .signin-name,.signin-row .signin-url{width:100%}}

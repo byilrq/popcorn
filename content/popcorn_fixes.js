@@ -1,8 +1,8 @@
 // Popcorn extension site-specific fixes loaded after the original userscript.
 // Keeps the upstream userscript mostly intact while patching browser-extension compatibility gaps.
 (() => {
-  if (window.__POPCORN_FIXES_V36__) return;
-  window.__POPCORN_FIXES_V36__ = true;
+  if (window.__POPCORN_FIXES_V37__) return;
+  window.__POPCORN_FIXES_V37__ = true;
 
   const $ = window.jQuery || window.$;
   const DOUBAN_PREFIX = 'https://movie.douban.com/subject/';
@@ -527,12 +527,51 @@
     holder.style.cssText = 'margin:12px 0;padding:10px 12px;border:1px solid rgba(120,120,120,.35);background:rgba(0,0,0,.08);line-height:1.8;font-size:14px;clear:both;';
     const quick = imdb ? quickSearchList().map(x => substituteQuick(x, imdb, title)).join(' | ') : '';
     holder.innerHTML = '<b style="margin-right:12px;">转发种子</b>' +
-      (quick ? '<span class="search_urls" style="font-size:14px;">' + quick + '</span>' : '<span style="opacity:.75;">未识别到 IMDb，无法生成快捷搜索</span>') +
-      '<div style="margin-top:4px;"><span style="color:green;font-weight:bold;">Tools → </span><a href="#" class="popcorn-open-options">脚本设置</a></div>';
-    holder.querySelectorAll('a').forEach(a => { if (!a.classList.contains('popcorn-open-options')) { a.style.color = '#2f8cff'; a.style.fontWeight = '700'; } });
-    const open = holder.querySelector('.popcorn-open-options');
-    if (open) open.addEventListener('click', (e) => { e.preventDefault(); try { window.postMessage({ type:'POPCORN_OPEN_OPTIONS' }, '*'); } catch (_) {} });
+      (quick ? '<span class="search_urls" style="font-size:14px;">' + quick + '</span>' : '<span style="opacity:.75;">未识别到 IMDb，无法生成快捷搜索</span>');
+    holder.querySelectorAll('a').forEach(a => { a.style.color = '#2f8cff'; a.style.fontWeight = '700'; });
     const target = document.querySelector('.torrent_table, table.Table, table, .main_column, #content, .Body, main') || document.body;
+    try { target.parentNode.insertBefore(holder, target.nextSibling); }
+    catch (_) { document.body.insertBefore(holder, document.body.firstChild); }
+  }
+
+
+  function cleanupPtpDetailTransferControls() {
+    if (!/^https?:\/\/passthepopcorn\.me\/torrents\.php\?id=/i.test(location.href)) return;
+    const ids = ['input_box','search_button','douban_api','ptgen_button','douban_button','download_pngs','select_img'];
+    ids.forEach(id => {
+      const el = document.getElementById(id);
+      if (!el) return;
+      const parent = el.parentNode;
+      try { el.remove(); } catch (_) {}
+      if (parent) {
+        Array.from(parent.childNodes || []).forEach(n => {
+          if (n.nodeType === 3 && /^\s*(API|API接口|豆瓣网址|检索名称|ptgen跳转|获取成功|转存截图)\s*$/i.test(n.nodeValue || '')) {
+            try { n.remove(); } catch (_) {}
+          }
+        });
+      }
+    });
+    Array.from(document.querySelectorAll('input[type="button"],button')).forEach(el => {
+      const v = (el.value || el.textContent || '').trim();
+      if (/^(检索名称|ptgen跳转|点击获取|获取成功|获取失败|获取中……|转存截图|处理中…)$/.test(v)) {
+        try { el.remove(); } catch (_) {}
+      }
+    });
+  }
+
+
+  function addChdDetailSearchFallback() {
+    if (!/^https?:\/\/(ptchdbits\.co|[^\/]{1,8}\.chddiy\.xyz)\/details\.php/i.test(location.href)) return;
+    if (document.querySelector('.search_urls, .popcorn-chd-detail-search')) return;
+    const imdb = findImdbInScope(document.body);
+    if (!imdb) return;
+    const titleNode = document.querySelector('h1, .title, #top, a[href*="details.php"], td.embedded h1') || document.querySelector('td[colspan], table td');
+    const title = cleanTitleForSearch((titleNode && titleNode.textContent) || document.title || imdb);
+    const holder = document.createElement('div');
+    holder.className = 'search_urls popcorn-chd-detail-search';
+    holder.style.cssText = 'text-align:center;border:1px solid blue;margin:8px 0;padding:4px;line-height:1.6;';
+    holder.innerHTML = '<font color="red">快速搜索：' + quickSearchList().map(x => substituteQuick(x, imdb, title)).join(' | ') + '</font>';
+    const target = document.querySelector('#outer, #content, .main, table, body') || document.body;
     try { target.parentNode.insertBefore(holder, target.nextSibling); }
     catch (_) { document.body.insertBefore(holder, document.body.firstChild); }
   }
@@ -793,7 +832,7 @@
   }
 
   function selectedSeriesSearchSites() {
-    const fallback = ['BHD', 'BTN'];
+    const fallback = ['BHD', 'BTN', 'ADE'];
     let raw = null;
     try { raw = window.GM_getValue('__popcorn_series_search_sites'); } catch (_) {}
     let arr = [];
@@ -1328,6 +1367,7 @@
     parent.insertBefore(document.createTextNode(' | '), dlAnchor);
   }
   function addTransmissionButtons() {
+    if (/^https?:\/\/(broadcasthe\.net|backup\.landof\.tv)\/torrents\.php/i.test(location.href)) return;
     if (!transmissionSiteEnabledHere()) return;
     try {
       if (typeof GM_addStyle === 'function' && !document.getElementById('popcorn-tm-style')) {
@@ -1361,6 +1401,8 @@
     cleanupExclusiveStatus();
     cleanupBhdTitleAndSearch();
     addGpwFallbackDisplay();
+    cleanupPtpDetailTransferControls();
+    addChdDetailSearchFallback();
     addTransmissionButtons();
     setTimeout(() => {
       rewriteDoubanBhdLinks();
@@ -1374,10 +1416,12 @@
       fixBtnSeriesDouban().catch(e => console.debug('[Popcorn] BTN Douban fix skipped', e));
       enhanceBtnSeriesTitleWithDouban().catch(e => console.debug('[Popcorn] BTN title Douban enhance skipped', e));
       addGpwFallbackDisplay();
+      cleanupPtpDetailTransferControls();
+      addChdDetailSearchFallback();
       addTransmissionButtons();
     }, 800);
-    setTimeout(() => { cleanupExclusiveStatus(); cleanupBhdTitleAndSearch(); addGpwFallbackDisplay(); addTransmissionButtons(); fixBhdSeriesSearchImdb().catch(e => console.debug('[Popcorn] BHD series IMDb search fix skipped', e)); fixBtnSearchImdbField().catch(e => console.debug('[Popcorn] BTN IMDb search fix skipped', e)); }, 2500);
-    setTimeout(() => { cleanupExclusiveStatus(); cleanupBhdTitleAndSearch(); addGpwFallbackDisplay(); addTransmissionButtons(); cleanupBtnDuplicateTitles(); enhanceBtnSeriesTitleWithDouban().catch(e => console.debug('[Popcorn] BTN title Douban enhance skipped', e)); }, 5000);
+    setTimeout(() => { cleanupExclusiveStatus(); cleanupBhdTitleAndSearch(); addGpwFallbackDisplay(); cleanupPtpDetailTransferControls(); addChdDetailSearchFallback(); addTransmissionButtons(); fixBhdSeriesSearchImdb().catch(e => console.debug('[Popcorn] BHD series IMDb search fix skipped', e)); fixBtnSearchImdbField().catch(e => console.debug('[Popcorn] BTN IMDb search fix skipped', e)); }, 2500);
+    setTimeout(() => { cleanupExclusiveStatus(); cleanupBhdTitleAndSearch(); addGpwFallbackDisplay(); cleanupPtpDetailTransferControls(); addChdDetailSearchFallback(); addTransmissionButtons(); cleanupBtnDuplicateTitles(); enhanceBtnSeriesTitleWithDouban().catch(e => console.debug('[Popcorn] BTN title Douban enhance skipped', e)); }, 5000);
   }
   runSoon();
   try {

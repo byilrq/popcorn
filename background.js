@@ -296,6 +296,65 @@ function waitForTabComplete(tabId, timeoutMs = 45000) {
   });
 }
 
+
+function sleep(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+async function verifyTabLoggedIn(tabId) {
+  if (!tabId) return { ok:false, reason:'没有可校验的标签页' };
+  try {
+    const result = await chrome.scripting.executeScript({
+      target: { tabId },
+      func: () => {
+        const url = location.href;
+        const path = location.pathname.toLowerCase();
+        const bodyText = (document.body && document.body.innerText || '').replace(/\s+/g, ' ').slice(0, 20000);
+        const html = (document.documentElement && document.documentElement.innerHTML || '').slice(0, 50000);
+        const lowerText = bodyText.toLowerCase();
+        const lowerHtml = html.toLowerCase();
+
+        const loginPath = /\/(login|signin|takelogin|account-login|auth|oauth|sso)(\.php|\/|$|\?)/i.test(path);
+        const passwordInput = !!document.querySelector('input[type="password"], input[name*="password" i], input[id*="password" i]');
+        const loginForm = !!document.querySelector('form[action*="login" i], form[action*="takelogin" i], form[action*="signin" i]');
+        const loginButtonText = /(登录|登入|sign in|log in|login|password|密码|验证码|captcha|two[- ]?factor|2fa|passkey)/i.test(bodyText);
+        const explicitLoggedOut = /(not logged in|please log in|please login|sign in to|你还没有登录|请先登录|请登录|未登录|游客|guest)/i.test(bodyText);
+
+        const logoutLink = !!document.querySelector('a[href*="logout" i], a[href*="logoff" i], a[href*="signout" i], a[href*="sign-out" i], form[action*="logout" i]');
+        const userAreaLink = !!document.querySelector([
+          'a[href*="userdetails" i]',
+          'a[href*="usercp" i]',
+          'a[href*="my.php" i]',
+          'a[href*="profile" i]',
+          'a[href*="messages" i]',
+          'a[href*="inbox" i]',
+          'a[href*="mybonus" i]',
+          'a[href*="bonus" i]',
+          'a[href*="torrents.php" i]',
+          'a[href*="upload.php" i]'
+        ].join(','));
+        const ptLoggedInText = /(logout|log out|退出|登出|注销|控制面板|个人中心|用户中心|我的账户|我的账号|收件箱|站内信|魔力值|做种积分|分享率|上传量|下载量|ratio|uploaded|downloaded|bonus|invite)/i.test(bodyText);
+        const loggedInByCookieUI = lowerHtml.includes('logout.php') || lowerHtml.includes('userdetails.php') || lowerHtml.includes('usercp.php');
+
+        if (loginPath || passwordInput || loginForm || explicitLoggedOut) {
+          return { ok:false, url, reason:'页面仍显示登录/密码/验证码/未登录信息' };
+        }
+        if (logoutLink || loggedInByCookieUI || (userAreaLink && ptLoggedInText)) {
+          return { ok:true, url, reason:'页面显示已登录入口/退出登录/用户信息' };
+        }
+        if (ptLoggedInText && !loginButtonText) {
+          return { ok:true, url, reason:'页面显示 PT 用户状态信息' };
+        }
+        return { ok:false, url, reason:'未检测到明确的已登录特征' };
+      }
+    });
+    const data = result && result[0] && result[0].result;
+    return data && typeof data === 'object' ? data : { ok:false, reason:'校验脚本没有返回结果' };
+  } catch (e) {
+    return { ok:false, reason:e && e.message ? e.message : String(e || '登录状态校验失败') };
+  }
+}
+
 async function runKeepalive(force = false) {
   const cfg = await chrome.storage.local.get([
     '__auto_feed_keepalive_enabled',
@@ -330,12 +389,20 @@ async function runKeepalive(force = false) {
       const loaded = await waitForTabComplete(tab && tab.id, 45000);
       const doneAt = new Date().toISOString();
       if (loaded) {
-        site.lastSuccessAt = doneAt;
-        site.lastSuccessDate = today;
-        site.lastStatus = 'success';
+        await sleep(1500);
+        const loginCheck = await verifyTabLoggedIn(tab && tab.id);
+        if (loginCheck.ok) {
+          site.lastSuccessAt = doneAt;
+          site.lastSuccessDate = today;
+          site.lastStatus = 'success';
+          site.lastError = loginCheck.reason || '';
+        } else {
+          site.lastStatus = 'unauth';
+          site.lastError = loginCheck.reason || '未确认真实登录，未记为成功';
+        }
       } else {
         site.lastStatus = 'timeout';
-        site.lastError = '页面加载超时或无响应';
+        site.lastError = '页面加载超时或无响应，未确认真实登录';
       }
       if (autoclose && tab && tab.id) setTimeout(() => chrome.tabs.remove(tab.id).catch(()=>{}), closeDelay);
     } catch (e) {
