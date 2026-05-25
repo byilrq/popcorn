@@ -1359,15 +1359,54 @@
   function insertTextTmButtons(parent, dlAnchor) {
     if (!parent || !dlAnchor || parent.querySelector('.popcorn-tm-btn')) return;
     try { parent.style.whiteSpace = 'nowrap'; } catch (_) {}
+    const wrap = document.createElement('span');
+    wrap.className = 'popcorn-tm-inline-wrap';
     const tm = createTmPushButton('TM', '推送到 Transmission 电影路径', 'movie', dlAnchor);
     const tv = createTmPushButton('TV', '推送到 Transmission 剧集路径', 'tv', dlAnchor);
-    parent.insertBefore(tm, dlAnchor);
-    parent.insertBefore(document.createTextNode(' | '), dlAnchor);
-    parent.insertBefore(tv, dlAnchor);
-    parent.insertBefore(document.createTextNode(' | '), dlAnchor);
+    wrap.appendChild(tm);
+    wrap.appendChild(document.createTextNode(' | '));
+    wrap.appendChild(tv);
+    wrap.appendChild(document.createTextNode(' | '));
+    parent.insertBefore(wrap, dlAnchor);
+  }
+  function isPtpPosterArea(parent, dlAnchor) {
+    if (!/(^|\.)passthepopcorn\.me$/i.test(location.hostname || '')) return false;
+    const cell = (dlAnchor && dlAnchor.closest && (dlAnchor.closest('td, th, li, div') || dlAnchor.closest('tr'))) || parent;
+    const scope = cell || parent;
+    if (!scope) return false;
+    if (scope.querySelector && scope.querySelector('img')) return true;
+    const hostCell = dlAnchor && dlAnchor.closest ? dlAnchor.closest('td, th') : null;
+    if (hostCell && hostCell !== scope && hostCell.querySelector && hostCell.querySelector('img')) return true;
+    return false;
+  }
+  function isPtpDetailPage() {
+    if (!/(^|\.)passthepopcorn\.me$/i.test(location.hostname || '')) return false;
+    try {
+      const url = new URL(location.href);
+      return /\/torrents\.php$/i.test(url.pathname) && !!url.searchParams.get('id');
+    } catch (_) {
+      return /^https?:\/\/passthepopcorn\.me\/torrents\.php\?id=/i.test(location.href);
+    }
+  }
+  function isPtpTorrentDownloadAnchor(a) {
+    if (!a || !/(^|\.)passthepopcorn\.me$/i.test(location.hostname || '')) return false;
+    if (a.dataset.popcornTmBound === '1') return false;
+    const text = (a.textContent || '').replace(/\s+/g, ' ').trim();
+    const href = a.getAttribute('href') || '';
+    if (!/^\[?\s*DL\s*\]?$/i.test(text)) return false;
+    try {
+      const url = new URL(href, location.href);
+      return /(^|\.)passthepopcorn\.me$/i.test(url.hostname)
+        && /\/torrents\.php$/i.test(url.pathname)
+        && /^download$/i.test(url.searchParams.get('action') || '')
+        && !!url.searchParams.get('id');
+    } catch (_) {
+      return /torrents\.php\?[^#]*action=download[^#]*[?&]id=\d+/i.test(href);
+    }
   }
   function addTransmissionButtons() {
     if (/^https?:\/\/(broadcasthe\.net|backup\.landof\.tv)\/torrents\.php/i.test(location.href)) return;
+    if (/(^|\.)passthepopcorn\.me$/i.test(location.hostname || '') && !isPtpDetailPage()) return;
     if (!transmissionSiteEnabledHere()) return;
     try {
       if (typeof GM_addStyle === 'function' && !document.getElementById('popcorn-tm-style')) {
@@ -1381,10 +1420,21 @@
       }
     } catch (_) {}
     Array.from(document.querySelectorAll('a[href]')).forEach(a => {
+      const isPtp = /(^|\.)passthepopcorn\.me$/i.test(location.hostname || '');
+      if (isPtp) {
+        if (!isPtpTorrentDownloadAnchor(a)) return;
+        const parent = a.parentNode;
+        if (!parent) return;
+        if (parent.querySelector && parent.querySelector('.popcorn-tm-btn')) return;
+        a.dataset.popcornTmBound = '1';
+        insertTextTmButtons(parent, a);
+        return;
+      }
       if (!isTorrentDownloadAnchor(a)) return;
       a.dataset.popcornTmBound = '1';
       const parent = a.parentNode;
       if (!parent) return;
+      if (isPtpPosterArea(parent, a)) return;
       if (parent.querySelector && parent.querySelector('.popcorn-tm-btn')) return;
       if (isIconActionGroup(parent, a)) insertIconTmButtons(parent, a);
       else insertTextTmButtons(parent, a);
