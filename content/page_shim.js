@@ -163,8 +163,8 @@
       if (details.onload) {
         try { details.onload(res); } catch (e) {
           const msg = String(e && (e.message || e) || '');
-          if (/Cannot read properties of undefined \(reading 'match'\)|Cannot read property 'match' of undefined/.test(msg)) {
-            console.debug('[auto_feed onload ignored empty match]', e);
+          if (/Cannot read properties of undefined \(reading '(?:match|replace)'\)|Cannot read property '(?:match|replace)' of undefined/.test(msg)) {
+            console.debug('[auto_feed onload ignored empty optional string method]', e);
           } else {
             console.error('[auto_feed onload]', e);
           }

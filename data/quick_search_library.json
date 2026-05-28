@@ -10,6 +10,11 @@
     "html": "<a href=\"https://beyond-hd.me/torrents?search={imdbid}\" target=\"_blank\">BHD</a>"
   },
   {
+    "name": "BLU",
+    "href": "https://blutopia.cc/torrents?imdbid={imdbno}&perPage=25&imdbId={imdbno}",
+    "html": "<a href=\"https://blutopia.cc/torrents?imdbid={imdbno}&perPage=25&imdbId={imdbno}\" target=\"_blank\">BLU</a>"
+  },
+  {
     "name": "BTN",
     "href": "https://broadcasthe.net/torrents.php?action=advanced&searchstr=&searchtags=&tags_type=1&groupdesc=&imdbid={imdbid}",
     "html": "<a href=\"https://broadcasthe.net/torrents.php?action=advanced&searchstr=&searchtags=&tags_type=1&groupdesc=&imdbid={imdbid}\" target=\"_blank\">BTN</a>"

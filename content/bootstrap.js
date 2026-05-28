@@ -6,6 +6,7 @@ const AUTO_FEED_ALLOWED_HOSTS = [
   "audiences.me",
   "backup.landof.tv",
   "beyond-hd.me",
+  "blutopia.cc",
   "broadcasthe.net",
   "douban.com",
   "greatposterwall.com",

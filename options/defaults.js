@@ -8,6 +8,10 @@ window.AUTO_FEED_DEFAULTS = {
         "url": "https://beyond-hd.me/",
         "enable": 0
     },
+    "BLU": {
+        "url": "https://blutopia.cc/",
+        "enable": 0
+    },
     "BTN": {
         "url": "https://broadcasthe.net/",
         "enable": 0
@@ -48,6 +52,7 @@ window.AUTO_FEED_DEFAULTS = {
   "default_show_search_urls": {
       "PTP": 1,
       "BHD": 1,
+      "BLU": 1,
       "CHD": 1,
       "ADE": 1,
       "GPW": 1,
@@ -75,6 +80,7 @@ window.AUTO_FEED_DEFAULTS = {
   "default_search_list": [
       "<a href=\"https://passthepopcorn.me/torrents.php?searchstr={imdbid}\" target=\"_blank\">PTP</a>",
       "<a href=\"https://beyond-hd.me/torrents?search={imdbid}\" target=\"_blank\">BHD</a>",
+      "<a href=\"https://blutopia.cc/torrents?imdbid={imdbno}&perPage=25&imdbId={imdbno}\" target=\"_blank\">BLU</a>",
       "<a href=\"https://ptchdbits.co/torrents.php?incldead=0&spstate=0&inclbookmarked=0&search={imdbid}&search_area=4&search_mode=0\" target=\"_blank\">CHD</a>",
       "<a href=\"https://audiences.me/torrents.php?cat401=1&cat402=1&cat403=1&incldead=0&spstate=0&inclbookmarked=0&search={imdbid}&search_area=4\" target=\"_blank\">ADE</a>",
       "<a href=\"https://greatposterwall.com/torrents.php?searchstr={imdbid}\" target=\"_blank\">GPW</a>",
@@ -84,6 +90,7 @@ window.AUTO_FEED_DEFAULTS = {
   "default_common_sites": [
       "PTP",
       "BHD",
+      "BLU",
       "CHD",
       "ADE",
       "GPW",

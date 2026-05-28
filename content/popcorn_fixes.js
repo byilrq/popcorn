@@ -1,8 +1,8 @@
 // Popcorn extension site-specific fixes loaded after the original userscript.
 // Keeps the upstream userscript mostly intact while patching browser-extension compatibility gaps.
 (() => {
-  if (window.__POPCORN_FIXES_V37__) return;
-  window.__POPCORN_FIXES_V37__ = true;
+  if (window.__POPCORN_FIXES_V39__) return;
+  window.__POPCORN_FIXES_V39__ = true;
 
   const $ = window.jQuery || window.$;
   const DOUBAN_PREFIX = 'https://movie.douban.com/subject/';
@@ -23,6 +23,7 @@
   const DEFAULT_QUICK_SEARCH = [
     '<a href="https://passthepopcorn.me/torrents.php?searchstr={imdbid}" target="_blank">PTP</a>',
     '<a href="https://beyond-hd.me/torrents?search={imdbid}" target="_blank">BHD</a>',
+    '<a href="https://blutopia.cc/torrents?imdbid={imdbno}&perPage=25&imdbId={imdbno}" target="_blank">BLU</a>',
     '<a href="https://ptchdbits.co/torrents.php?incldead=0&spstate=0&inclbookmarked=0&search={imdbid}&search_area=4&search_mode=0" target="_blank">CHD</a>',
     '<a href="https://audiences.me/torrents.php?cat401=1&cat402=1&cat403=1&incldead=0&spstate=0&inclbookmarked=0&search={imdbid}&search_area=4" target="_blank">ADE</a>',
     '<a href="https://greatposterwall.com/torrents.php?searchstr={imdbid}" target="_blank">GPW</a>',
@@ -418,6 +419,100 @@
       target.textContent = summary;
       target.dataset.popcornBhdSummaryDone = '1';
     }
+  }
+
+
+  function isBluDetailPage() {
+    if (!isBluHost()) return false;
+    try {
+      const url = new URL(location.href);
+      return /^\/torrents\/\d+(?:\/)?$/i.test(url.pathname) || /^\/torrents\/\d+\//i.test(url.pathname);
+    } catch (_) { return /^https?:\/\/blutopia\.cc\/torrents\/\d+/i.test(location.href); }
+  }
+
+  function findBluTitleElement() {
+    const selectors = ['h1','h2','.torrent-title','.movie-title','.page-title','.card-title','[class*="title" i]','[class*="heading" i]'];
+    const candidates = unique(selectors.flatMap(sel => Array.from(document.querySelectorAll(sel)))).filter(el => {
+      const t = (el.textContent || '').replace(/\s+/g, ' ').trim();
+      if (t.length < 3 || t.length > 240) return false;
+      if (/豆瓣信息|快速搜索|Uploaded|Type|Category|Size|Files|Peers|Seeders|Leechers|Comments|Thanks/i.test(t)) return false;
+      if (el.querySelector('input,textarea,button,select')) return false;
+      return el.tagName === 'H1' || el.tagName === 'H2' || /\b(19|20)\d{2}\b|2160p|1080p|720p|BluRay|WEB|REMUX|UHD/i.test(t);
+    });
+    return candidates.sort((a,b) => a.getBoundingClientRect().top - b.getBoundingClientRect().top)[0] || document.querySelector('h1,h2');
+  }
+
+  function stripBluInjectedTitle(raw) {
+    return text(raw).replace(/\s*\|\s*[^|]{0,90}\[(?:暂无评分|[0-9.]+分(?:\|[\d,]+人)?)\]/g, '').replace(/\s+/g, ' ').trim();
+  }
+
+  function applyBluTitleInfo(titleEl, info) {
+    if (!titleEl || titleEl.dataset.popcornBluTitleDone === '1') return;
+    const current = titleEl.textContent || '';
+    if (/[一-鿿][^|]{0,80}\[(?:暂无评分|\d+(?:\.\d+)?分)/.test(current) && !/429\s+Too\s+Many\s+Requests/i.test(current)) {
+      titleEl.dataset.popcornBluTitleDone = '1';
+      return;
+    }
+    const base = stripBluInjectedTitle(current);
+    const label = cleanDoubanTitleForBhd(info && info.title).replace(/\s*\(.*?\)\s*$/g, '').trim();
+    if (!label || /429\s+Too\s+Many\s+Requests/i.test(label)) return;
+    const a = document.createElement('a');
+    a.href = (info && info.url) || '#';
+    a.target = '_blank';
+    a.className = 'popcorn-blu-douban-score';
+    a.style.cssText = 'margin-left:8px;text-decoration:none;font-weight:600;color:inherit;';
+    a.textContent = ' | ' + label + '[' + formatScore(info) + ']';
+    titleEl.textContent = base;
+    titleEl.appendChild(a);
+    titleEl.dataset.popcornBluTitleDone = '1';
+  }
+
+  function applyBluChineseSummary(info) {
+    const summary = text(info && info.summary).replace(/\s+/g, ' ').trim();
+    if (!summary || summary.length < 20) return;
+    const selectors = ['.movie-overview','.overview','.synopsis','.description','.torrent-description','.bbcode-rendered','[class*="overview" i]','[class*="synopsis" i]','[class*="description" i]','p'];
+    const nodes = unique(selectors.flatMap(sel => Array.from(document.querySelectorAll(sel))));
+    const candidates = nodes.filter(el => {
+      if (el.dataset.popcornBluSummaryDone === '1') return false;
+      if (el.querySelector('input,textarea,button,select')) return false;
+      const t = (el.textContent || '').replace(/\s+/g, ' ').trim();
+      if (t.length < 40 || t.length > 1800) return false;
+      if (/豆瓣信息|快速搜索|Uploaded|Category|Thanks|Comments|Files|Peers|Seeders|Leechers|Mediainfo/i.test(t)) return false;
+      const ascii = (t.match(/[A-Za-z]/g) || []).length;
+      const cjk = (t.match(/[一-鿿]/g) || []).length;
+      return ascii > cjk && ascii > 30;
+    });
+    const target = candidates.sort((a,b) => a.getBoundingClientRect().top - b.getBoundingClientRect().top)[0];
+    if (target) {
+      target.textContent = summary;
+      target.dataset.popcornBluSummaryDone = '1';
+    }
+  }
+
+  let bluDoubanInfoPromise = null;
+  function bluHasTitleInfo() {
+    return !!document.querySelector('.popcorn-blu-douban-score') || /[一-鿿][^|]{0,80}\[(?:暂无评分|\d+(?:\.\d+)?分)/.test((document.querySelector('h1,h2') || {}).textContent || '');
+  }
+  function bluHasChineseSummary() {
+    return !!document.querySelector('[data-popcorn-blu-summary-done="1"]');
+  }
+  async function getBluDoubanInfo(titleEl) {
+    if (bluDoubanInfoPromise) return bluDoubanInfoPromise;
+    bluDoubanInfoPromise = (async () => {
+      const imdb = await waitForCondition(() => getPageImdbId(document), 20000, 300);
+      const douban = findDoubanHrefInScope(document);
+      const titleText = titleEl ? titleEl.textContent : document.title;
+      return await findDoubanInfo({ imdb, douban, title: titleText });
+    })();
+    return bluDoubanInfoPromise;
+  }
+  async function fixBluTitleDouban() {
+    if (!isBluDetailPage()) return;
+    const titleEl = await waitForCondition(() => findBluTitleElement(), 20000, 300);
+    const info = await getBluDoubanInfo(titleEl).catch(() => null);
+    if (!info || (!info.average && !info.title && !info.summary)) return;
+    if (!bluHasTitleInfo()) applyBluTitleInfo(titleEl, info);
+    if (!bluHasChineseSummary()) applyBluChineseSummary(info);
   }
 
 
@@ -820,6 +915,12 @@
       url.hostname = 'ptchdbits.co';
       url.pathname = '/torrents.php';
       url.search = '?incldead=0&spstate=0&inclbookmarked=0&search=' + encodeURIComponent(resolved) + '&search_area=4&search_mode=0';
+    } else if (siteKey === 'BLU') {
+      url.protocol = 'https:';
+      url.hostname = 'blutopia.cc';
+      url.pathname = '/torrents';
+      const imdbNo = String(resolved || '').replace(/^tt/i, '');
+      url.search = '?imdbid=' + encodeURIComponent(imdbNo) + '&perPage=25&imdbId=' + encodeURIComponent(imdbNo);
     } else if (siteKey === 'ADE') {
       ['search','searchstr','imdb','imdbid','q'].forEach(k => {
         const v = url.searchParams.get(k);
@@ -851,6 +952,7 @@
     if (/^BHD$/i.test(name) || href.includes('beyond-hd.me')) return 'BHD';
     if (/^BTN$/i.test(name) || href.includes('broadcasthe.net') || href.includes('backup.landof.tv')) return 'BTN';
     if (/^CHD$/i.test(name) || href.includes('ptchdbits.co') || href.includes('chdbits.co') || href.includes('chddiy.xyz')) return 'CHD';
+    if (/^BLU$/i.test(name) || href.includes('blutopia.cc')) return 'BLU';
     if (/^ADE$/i.test(name) || href.includes('audiences.me')) return 'ADE';
     if (/^PTP$/i.test(name) || href.includes('passthepopcorn.me')) return 'PTP';
     if (/^GPW$/i.test(name) || href.includes('greatposterwall.com')) return 'GPW';
@@ -880,6 +982,12 @@
         url.hostname = 'ptchdbits.co';
         url.pathname = '/torrents.php';
         url.search = '?incldead=0&spstate=0&inclbookmarked=0&search=' + encodeURIComponent(resolved) + '&search_area=4&search_mode=0';
+      } else if (key === 'BLU') {
+        url.protocol = 'https:';
+        url.hostname = 'blutopia.cc';
+        url.pathname = '/torrents';
+        const imdbNo = String(resolved || '').replace(/^tt/i, '');
+        url.search = '?imdbid=' + encodeURIComponent(imdbNo) + '&perPage=25&imdbId=' + encodeURIComponent(imdbNo);
       } else {
         ['search','searchstr','imdb','imdbid','q'].forEach(k => {
           const v = url.searchParams.get(k);
@@ -1145,6 +1253,7 @@
     const href = location.href;
     let key = '';
     if (/^https:\/\/(ptchdbits\.co|chdbits\.co|[^\/]+\.chddiy\.xyz)\/torrents\.php/i.test(href)) key = 'CHD';
+    if (/^https:\/\/blutopia\.cc\/torrents/i.test(href)) key = 'BLU';
     if (/^https:\/\/audiences\.me\/torrents\.php/i.test(href)) key = 'ADE';
     if (!key || !selectedSeriesSearchSites().has(key)) return;
     const params = new URLSearchParams(location.search);
@@ -1172,6 +1281,12 @@
       url.hostname = 'ptchdbits.co';
       url.pathname = '/torrents.php';
       url.search = '?incldead=0&spstate=0&inclbookmarked=0&search=' + encodeURIComponent(resolved) + '&search_area=4&search_mode=0';
+    } else if (key === 'BLU') {
+      url.protocol = 'https:';
+      url.hostname = 'blutopia.cc';
+      url.pathname = '/torrents';
+      const imdbNo = String(resolved || '').replace(/^tt/i, '');
+      url.search = '?imdbid=' + encodeURIComponent(imdbNo) + '&perPage=25&imdbId=' + encodeURIComponent(imdbNo);
     } else {
       ['search','searchstr','imdb','imdbid','q'].forEach(k => {
         const v = url.searchParams.get(k);
@@ -1228,11 +1343,12 @@
   function tmKnownKeyFromHtml(html) {
     const name = tmAnchorName(html).toLowerCase();
     const href = tmAnchorHref(html).toLowerCase();
-    const nameMap = { ptp:'PTP', bhd:'BHD', chd:'CHD', chdbits:'CHD', ade:'ADE', audiences:'ADE', gpw:'GPW', btn:'BTN', douban:'豆瓣', '豆瓣':'豆瓣' };
+    const nameMap = { ptp:'PTP', bhd:'BHD', blu:'BLU', chd:'CHD', chdbits:'CHD', ade:'ADE', audiences:'ADE', gpw:'GPW', btn:'BTN', douban:'豆瓣', '豆瓣':'豆瓣' };
     if (nameMap[name]) return nameMap[name];
     if (href.includes('passthepopcorn')) return 'PTP';
     if (href.includes('broadcasthe') || href.includes('landof.tv')) return 'BTN';
     if (href.includes('beyond-hd')) return 'BHD';
+    if (href.includes('blutopia.cc')) return 'BLU';
     if (href.includes('chdbits') || href.includes('chddiy')) return 'CHD';
     if (href.includes('audiences')) return 'ADE';
     if (href.includes('greatposterwall')) return 'GPW';
@@ -1245,6 +1361,7 @@
     if (host.includes('passthepopcorn.me')) keys.add('PTP');
     if (host.includes('broadcasthe.net') || host.includes('landof.tv')) keys.add('BTN');
     if (host.includes('beyond-hd.me')) keys.add('BHD');
+    if (host.includes('blutopia.cc')) keys.add('BLU');
     if (host.includes('ptchdbits.co') || host.includes('chdbits') || host.includes('chddiy')) keys.add('CHD');
     if (host.includes('audiences.me')) keys.add('ADE');
     if (host.includes('greatposterwall.com')) keys.add('GPW');
@@ -1268,8 +1385,8 @@
   function transmissionSiteEnabledHere() {
     try {
       if (typeof GM_getValue === 'function' && Number(GM_getValue('__popcorn_tm_enabled', 0)) !== 1) return false;
-      const picked = tmParseCsv(typeof GM_getValue === 'function' ? GM_getValue('__popcorn_tm_sites', '') : '', ['PTP','BHD','CHD','ADE','GPW','BTN']);
-      const pickedSet = new Set((picked.length ? picked : ['PTP','BHD','CHD','ADE','GPW','BTN']).map(String));
+      const picked = tmParseCsv(typeof GM_getValue === 'function' ? GM_getValue('__popcorn_tm_sites', '') : '', ['PTP','BHD','BLU','CHD','ADE','GPW','BTN']);
+      const pickedSet = new Set((picked.length ? picked : ['PTP','BHD','BLU','CHD','ADE','GPW','BTN']).map(String));
       const here = tmCurrentSiteKeys();
       for (const k of here) if (pickedSet.has(k)) return true;
     } catch (_) {}
@@ -1287,19 +1404,122 @@
     if (!a.querySelector('img, svg, .fa, [class*="icon" i]')) return false;
     return /(download|download\.php|download\.asp|download\.do|gettorrent|torrent\/download|downloadtorrent|dl\.php|\btorrentid=|[?&]torrent=|[?&]id=)/i.test(href);
   }
+  function isBluHost() {
+    return /(^|\.)blutopia\.cc$/i.test(location.hostname || '');
+  }
+  function isBluTorrentDetailPage() {
+    if (!isBluHost()) return false;
+    try {
+      const url = new URL(location.href);
+      // UNIT3D detail pages are /torrents/<id>/<slug>. The search/list page is exactly /torrents.
+      if (/^\/torrents\/?$/i.test(url.pathname)) return false;
+      if (/^\/torrents\/[^\/?#]+(?:\/[^?#]*)?\/?$/i.test(url.pathname)) return true;
+      // Some BLU detail pages expose a name=download form/button; use it as a strong detail signal.
+      return !!document.querySelector('[name="download"]');
+    } catch (_) {
+      return /blutopia\.cc\/torrents\/[^\/?#]+/i.test(location.href) || !!document.querySelector('[name="download"]');
+    }
+  }
+  function bluTorrentIdFromLocation() {
+    try {
+      const m = String(location.pathname || '').match(/^\/torrents\/([0-9]+)(?:\/|$)/i);
+      return m ? m[1] : '';
+    } catch (_) { return ''; }
+  }
+  function getBluControlUrl(el) {
+    if (!el) return '';
+    const direct = (el.getAttribute && (el.getAttribute('href') || el.getAttribute('formaction') || el.getAttribute('data-url') || el.getAttribute('data-href'))) || el.href || '';
+    if (direct && !/^javascript:/i.test(direct)) return direct;
+    const form = el.form || (el.closest && el.closest('form'));
+    const action = form && (form.getAttribute('action') || form.action);
+    if (action && !/^javascript:/i.test(action)) return action;
+    const tid = bluTorrentIdFromLocation();
+    return tid ? (location.origin + '/torrents/download/' + tid) : '';
+  }
+  function isBluBadActionControl(el) {
+    const hay = [
+      el && el.getAttribute && (el.getAttribute('name') || ''),
+      el && el.getAttribute && (el.getAttribute('title') || ''),
+      el && el.getAttribute && (el.getAttribute('aria-label') || ''),
+      el && el.getAttribute && (el.getAttribute('class') || ''),
+      el && (el.textContent || ''),
+      el && (el.innerHTML || '')
+    ].join(' ');
+    return /bookmark|favorite|favourite|watch|rss|comment|thank|report|history|rating|收藏|fa-bookmark|icon-bookmark/i.test(hay);
+  }
+  function isBluVisibleActionControl(el) {
+    if (!el || !el.getAttribute) return false;
+    if (/^hidden$/i.test(el.getAttribute('type') || '')) return false;
+    if (el.disabled) return false;
+    try {
+      const cs = window.getComputedStyle(el);
+      if (cs && (cs.display === 'none' || cs.visibility === 'hidden')) return false;
+    } catch (_) {}
+    try {
+      const r = el.getBoundingClientRect && el.getBoundingClientRect();
+      if (r && r.width === 0 && r.height === 0) return false;
+    } catch (_) {}
+    return true;
+  }
+  function isBluDownloadControl(el) {
+    if (!el || !isBluHost()) return false;
+    if (el.classList && el.classList.contains('popcorn-tm-btn')) return false;
+    if (!isBluVisibleActionControl(el)) return false;
+    if (isBluBadActionControl(el)) return false;
+    const href = getBluControlUrl(el);
+    let url = null;
+    try { url = href ? new URL(href, location.href) : null; } catch (_) { url = null; }
+    const path = url ? url.pathname : href;
+    const name = (el.getAttribute && el.getAttribute('name')) || '';
+    const value = (el.getAttribute && el.getAttribute('value')) || '';
+    const label = (el.textContent || value || (el.getAttribute && (el.getAttribute('title') || el.getAttribute('aria-label'))) || '').replace(/\s+/g, ' ').trim();
+    // This is the route that made the first BLU version work; keep it for both list/search and detail rows.
+    if (/(\/torrents\/download(?:_check)?\/[^\/?#]+|\/download(?:_check)?\/[^\/?#]+|\/torrents\/[^\/?#]+\/download)/i.test(path)) return true;
+    // On the BLU detail page the visible button can be name="download" without an href.
+    if (/^download$/i.test(name) && isBluTorrentDetailPage()) return true;
+    if (/^(DL|Download|下载|Torrent|下载种子)$/i.test(label) && /download/i.test(path + ' ' + name)) return true;
+    return false;
+  }
+  function isUnit3dTorrentDownloadAnchor(a) {
+    return isBluDownloadControl(a);
+  }
+  function findBluDownloadControls() {
+    if (!isBluHost()) return [];
+    const controls = Array.from(document.querySelectorAll('a[href],button,input, [role="button"], [name="download"], [data-url], [data-href]'));
+    const seen = new Set();
+    const out = [];
+    controls.forEach(el => {
+      if (!isBluDownloadControl(el)) return;
+      const url = getBluControlUrl(el);
+      if (url && el.dataset) el.dataset.popcornTorrentUrl = /^https?:/i.test(url) ? url : new URL(url, location.href).href;
+      if (seen.has(el)) return;
+      seen.add(el);
+      out.push(el);
+    });
+    return out;
+  }
+  function findBluDownloadAnchor() {
+    const arr = findBluDownloadControls();
+    return arr.length ? arr[0] : null;
+  }
   function isTorrentDownloadAnchor(a) {
     if (!a || a.dataset.popcornTmBound === '1') return false;
     const text = (a.textContent || '').replace(/\s+/g, ' ').trim();
     const href = a.getAttribute('href') || '';
     // 文字站点只给真正显示为 DL 的下载链接加 TM/TV。
     // 图标式 NexusPHP 站点用 href + 图标识别，避免破坏原来的四宫格布局。
-    return (/^\[?\s*DL\s*\]?$/i.test(text) && !!href && !/^javascript:/i.test(href)) || isIconStyleTorrentAnchor(a);
+    return (/^\[?\s*DL\s*\]?$/i.test(text) && !!href && !/^javascript:/i.test(href)) || isUnit3dTorrentDownloadAnchor(a) || isIconStyleTorrentAnchor(a);
   }
   async function pushTorrentToTransmission(btn, dlAnchor, target) {
     const old = btn.textContent;
     const label = target === 'tv' ? 'TV' : 'TM';
     try {
-      const href = dlAnchor.getAttribute('href') || dlAnchor.href || '';
+      const href = (dlAnchor && dlAnchor.dataset && dlAnchor.dataset.popcornTorrentUrl)
+        || (dlAnchor && dlAnchor.getAttribute && dlAnchor.getAttribute('href'))
+        || (dlAnchor && dlAnchor.getAttribute && dlAnchor.getAttribute('formaction'))
+        || (dlAnchor && dlAnchor.href)
+        || getBluControlUrl(dlAnchor)
+        || '';
       const torrentUrl = new URL(href, location.href).href;
       btn.textContent = label + '...';
       btn.classList.add('is-working');
@@ -1341,18 +1561,29 @@
     if (!parent || !dlAnchor || parent.querySelector('.popcorn-tm-btn')) return;
     const wrap = document.createElement('span');
     wrap.className = 'popcorn-tm-icon-stack';
+    const isChd = /(^|\.)(ptchdbits\.co|chdbits\.co|[^.]+\.chddiy\.xyz)$/i.test(location.hostname || '');
+    let isChdSingleColumn = false;
+    if (isChd) {
+      wrap.classList.add('popcorn-tm-icon-stack-chd');
+      try {
+        const iconLinks = Array.from(parent.querySelectorAll('a[href]')).filter(a => a !== dlAnchor && !(a.textContent || '').trim());
+        isChdSingleColumn = iconLinks.length <= 1;
+      } catch (_) {}
+      if (isChdSingleColumn) wrap.classList.add('popcorn-tm-icon-stack-chd-singlecol');
+    }
     const tm = createTmPushButton('TM', '推送到 Transmission 电影路径', 'movie', dlAnchor);
     const tv = createTmPushButton('TV', '推送到 Transmission 剧集路径', 'tv', dlAnchor);
     wrap.appendChild(tm);
     wrap.appendChild(tv);
-    // Icon-style NexusPHP action cells often use a fixed 2x2 icon layout. Inserting
-    // a normal inline node before DL participates in that layout and pushes icons
-    // out of place. Overlay the TM/TV stack just to the left of the existing icon
-    // group instead, so the original DL/bookmark/RSS layout keeps its size.
     try {
       const currentPosition = window.getComputedStyle(parent).position;
       if (!currentPosition || currentPosition === 'static') parent.style.position = 'relative';
       parent.style.overflow = 'visible';
+      if (isChd) {
+        const currentPaddingLeft = parseFloat(window.getComputedStyle(parent).paddingLeft || '0') || 0;
+        const minPaddingLeft = isChdSingleColumn ? 24 : 19;
+        if (currentPaddingLeft < minPaddingLeft) parent.style.paddingLeft = minPaddingLeft + 'px';
+      }
     } catch (_) {}
     parent.appendChild(wrap);
   }
@@ -1368,6 +1599,124 @@
     wrap.appendChild(tv);
     wrap.appendChild(document.createTextNode(' | '));
     parent.insertBefore(wrap, dlAnchor);
+  }
+  function cleanupBluTransmissionControls() {
+    if (!isBluHost()) return;
+    try {
+      // Remove old generic BLU controls from earlier builds, but keep the new TM-only buttons.
+      Array.from(document.querySelectorAll('.popcorn-tm-inline-wrap, .popcorn-tm-icon-stack')).forEach(el => {
+        if (el.closest && !el.closest('body')) return;
+        try { el.remove(); } catch (_) {}
+      });
+      Array.from(document.querySelectorAll('.popcorn-tm-btn-tv, .popcorn-tm-btn:not(.popcorn-tm-blu-detail-tm)')).forEach(el => {
+        const prev = el.previousSibling;
+        const next = el.nextSibling;
+        if (prev && prev.nodeType === 3) prev.nodeValue = String(prev.nodeValue || '').replace(/[\s|]+$/, ' ');
+        if (next && next.nodeType === 3) next.nodeValue = String(next.nodeValue || '').replace(/^[\s|]+/, ' ');
+        try { el.remove(); } catch (_) {}
+      });
+      Array.from(document.querySelectorAll('td,th,div,span,form')).forEach(el => {
+        Array.from(el.childNodes || []).forEach(n => {
+          if (n.nodeType === 3 && /TM\s*\|\s*TV\s*\|?/i.test(n.nodeValue || '')) {
+            n.nodeValue = String(n.nodeValue || '').replace(/\s*TM\s*\|\s*TV\s*\|?\s*/ig, ' ').replace(/\s{2,}/g, ' ');
+          }
+        });
+      });
+    } catch (_) {}
+  }
+  function bluHasTmImmediatelyAfter(dlAnchor) {
+    let n = dlAnchor && dlAnchor.nextSibling;
+    while (n && n.nodeType === 3 && !String(n.nodeValue || '').trim()) n = n.nextSibling;
+    return !!(n && n.nodeType === 1 && n.classList && n.classList.contains('popcorn-tm-blu-detail-tm'));
+  }
+  function insertBluTmButton(parent, dlAnchor) {
+    if (!parent || !dlAnchor) return;
+    if (bluHasTmImmediatelyAfter(dlAnchor)) return;
+    try { parent.style.whiteSpace = 'nowrap'; } catch (_) {}
+    const tm = createTmPushButton('TM', '推送到 Transmission 电影路径', 'movie', dlAnchor);
+    tm.classList.add('popcorn-tm-blu-detail-tm');
+    tm.dataset.popcornBluTm = '1';
+    try {
+      dlAnchor.insertAdjacentText('afterend', ' ');
+      dlAnchor.insertAdjacentElement('afterend', tm);
+    } catch (_) {
+      if (dlAnchor.nextSibling) parent.insertBefore(tm, dlAnchor.nextSibling);
+      else parent.appendChild(tm);
+    }
+  }
+  function addBluTmOnlyButtons() {
+    if (!isBluHost()) return;
+    cleanupBluTransmissionControls();
+    const controls = findBluDownloadControls();
+    controls.forEach(dl => {
+      const parent = dl.parentNode || (dl.closest && dl.closest('form,td,th,div,span'));
+      if (!parent) return;
+      if (dl.dataset) dl.dataset.popcornTmBound = '1';
+      insertBluTmButton(parent, dl);
+    });
+  }
+  function findBracketSideTextNode(node, side) {
+    let current = node;
+    while (current) {
+      if (current.nodeType === 3) {
+        const value = String(current.nodeValue || '');
+        if (!value.trim()) {
+          current = side === 'left' ? current.previousSibling : current.nextSibling;
+          continue;
+        }
+        if (side === 'left' ? /\[\s*$/.test(value) : /^\s*\]/.test(value)) return current;
+        return null;
+      }
+      if (current.nodeType === 1 && !String(current.textContent || '').trim()) {
+        current = side === 'left' ? current.previousSibling : current.nextSibling;
+        continue;
+      }
+      return null;
+    }
+    return null;
+  }
+  function stripBracketSideTextNode(node, side) {
+    if (!node || node.nodeType !== 3) return;
+    const value = String(node.nodeValue || '');
+    const nextValue = side === 'left' ? value.replace(/\[\s*$/, '') : value.replace(/^\s*\]/, '');
+    if (nextValue) node.nodeValue = nextValue;
+    else if (node.parentNode) node.parentNode.removeChild(node);
+  }
+  function isBtnBracketDlAnchor(dlAnchor) {
+    if (!dlAnchor) return false;
+    const originalText = (dlAnchor.textContent || '').replace(/\s+/g, ' ').trim();
+    if (/^\[\s*DL\s*\]$/i.test(originalText)) return true;
+    if (!/^DL$/i.test(originalText)) return false;
+    const leftNode = findBracketSideTextNode(dlAnchor.previousSibling, 'left');
+    const rightNode = findBracketSideTextNode(dlAnchor.nextSibling, 'right');
+    return !!(leftNode && rightNode);
+  }
+  function insertBtnBracketTmButtons(parent, dlAnchor) {
+    if (!parent || !dlAnchor || parent.querySelector('.popcorn-tm-btn')) return;
+    try { parent.style.whiteSpace = 'nowrap'; } catch (_) {}
+    if (!isBtnBracketDlAnchor(dlAnchor)) {
+      insertTextTmButtons(parent, dlAnchor);
+      return;
+    }
+    const originalText = (dlAnchor.textContent || '').replace(/\s+/g, ' ').trim();
+    if (!/^\[\s*DL\s*\]$/i.test(originalText)) {
+      stripBracketSideTextNode(findBracketSideTextNode(dlAnchor.previousSibling, 'left'), 'left');
+      stripBracketSideTextNode(findBracketSideTextNode(dlAnchor.nextSibling, 'right'), 'right');
+    }
+    const wrap = document.createElement('span');
+    wrap.className = 'popcorn-tm-inline-wrap popcorn-tm-btn-bracket-wrap';
+    try { wrap.style.color = window.getComputedStyle(dlAnchor).color; } catch (_) {}
+    dlAnchor.textContent = 'DL';
+    const tm = createTmPushButton('TM', '推送到 Transmission 电影路径', 'movie', dlAnchor);
+    const tv = createTmPushButton('TV', '推送到 Transmission 剧集路径', 'tv', dlAnchor);
+    parent.insertBefore(wrap, dlAnchor);
+    wrap.appendChild(document.createTextNode('[ '));
+    wrap.appendChild(tm);
+    wrap.appendChild(document.createTextNode(' | '));
+    wrap.appendChild(tv);
+    wrap.appendChild(document.createTextNode(' | '));
+    wrap.appendChild(dlAnchor);
+    wrap.appendChild(document.createTextNode(' ]'));
   }
   function isPtpPosterArea(parent, dlAnchor) {
     if (!/(^|\.)passthepopcorn\.me$/i.test(location.hostname || '')) return false;
@@ -1405,7 +1754,6 @@
     }
   }
   function addTransmissionButtons() {
-    if (/^https?:\/\/(broadcasthe\.net|backup\.landof\.tv)\/torrents\.php/i.test(location.href)) return;
     if (/(^|\.)passthepopcorn\.me$/i.test(location.hostname || '') && !isPtpDetailPage()) return;
     if (!transmissionSiteEnabledHere()) return;
     try {
@@ -1415,10 +1763,20 @@
 .popcorn-tm-btn.is-working{opacity:.7}.popcorn-tm-btn.is-ok{color:#0a8f3c!important}.popcorn-tm-btn.is-bad{color:#c1121f!important}
 .popcorn-tm-icon-stack{position:absolute!important;left:-28px!important;top:50%!important;transform:translateY(-50%)!important;display:flex!important;flex-direction:column!important;align-items:center!important;justify-content:center!important;gap:4px!important;width:24px!important;min-width:24px!important;height:42px!important;margin:0!important;padding:0!important;line-height:1!important;white-space:nowrap!important;z-index:3!important;pointer-events:auto!important}
 .popcorn-tm-icon-stack .popcorn-tm-btn{display:block!important;width:24px!important;text-align:center!important;font-size:11.5px!important;font-weight:600!important;line-height:14px!important;opacity:.94!important;margin:0!important;padding:0!important}
+.popcorn-tm-icon-stack-chd{left:8px!important;gap:0!important;width:19px!important;min-width:19px!important;height:31px!important}
+.popcorn-tm-icon-stack-chd .popcorn-tm-btn{width:19px!important;font-size:13px!important;line-height:13px!important;opacity:.98!important}
+.popcorn-tm-icon-stack-chd .popcorn-tm-btn-movie{position:relative!important;top:-2px!important;margin-bottom:3px!important}
+.popcorn-tm-icon-stack-chd .popcorn-tm-btn-tv{position:relative!important;top:0!important}
+.popcorn-tm-icon-stack-chd-singlecol{left:8px!important}
+.popcorn-tm-blu-detail-tm{display:inline-flex!important;align-items:center!important;margin-left:8px!important;margin-right:0!important;font-weight:600!important;text-decoration:none!important;vertical-align:middle!important;white-space:nowrap!important}
 `);
         if (st) st.id = 'popcorn-tm-style';
       }
     } catch (_) {}
+    if (isBluHost()) {
+      addBluTmOnlyButtons();
+      return;
+    }
     Array.from(document.querySelectorAll('a[href]')).forEach(a => {
       const isPtp = /(^|\.)passthepopcorn\.me$/i.test(location.hostname || '');
       if (isPtp) {
@@ -1436,7 +1794,9 @@
       if (!parent) return;
       if (isPtpPosterArea(parent, a)) return;
       if (parent.querySelector && parent.querySelector('.popcorn-tm-btn')) return;
-      if (isIconActionGroup(parent, a)) insertIconTmButtons(parent, a);
+      const isBtn = /(^|\.)(broadcasthe\.net|backup\.landof\.tv)$/i.test(location.hostname || '');
+      if (isBtn && isBtnBracketDlAnchor(a)) insertBtnBracketTmButtons(parent, a);
+      else if (isIconActionGroup(parent, a)) insertIconTmButtons(parent, a);
       else insertTextTmButtons(parent, a);
     });
   }
@@ -1450,6 +1810,7 @@
     rewriteDoubanSelectedSeriesLinks().catch(e => console.debug('[Popcorn] selected Douban series IMDb normalize skipped', e));
     cleanupExclusiveStatus();
     cleanupBhdTitleAndSearch();
+    fixBluTitleDouban().catch(e => console.debug('[Popcorn] BLU Douban enhance skipped', e));
     addGpwFallbackDisplay();
     cleanupPtpDetailTransferControls();
     addChdDetailSearchFallback();
@@ -1460,6 +1821,7 @@
       rewriteDoubanSelectedSeriesLinks().catch(e => console.debug('[Popcorn] selected Douban series IMDb normalize skipped', e));
       cleanupExclusiveStatus();
       fixBhdTitleDouban().catch(e => console.debug('[Popcorn] BHD cleanup skipped', e));
+      fixBluTitleDouban().catch(e => console.debug('[Popcorn] BLU Douban enhance skipped', e));
       fixBhdSeriesSearchImdb().catch(e => console.debug('[Popcorn] BHD series IMDb search fix skipped', e));
       fixBtnSearchImdbField().catch(e => console.debug('[Popcorn] BTN IMDb search fix skipped', e)); fixSelectedSeriesTargetSearchImdb().catch(e => console.debug('[Popcorn] selected target IMDb search fix skipped', e));
       fixSelectedSeriesTargetSearchImdb().catch(e => console.debug('[Popcorn] selected target IMDb search fix skipped', e));
@@ -1470,15 +1832,25 @@
       addChdDetailSearchFallback();
       addTransmissionButtons();
     }, 800);
-    setTimeout(() => { cleanupExclusiveStatus(); cleanupBhdTitleAndSearch(); addGpwFallbackDisplay(); cleanupPtpDetailTransferControls(); addChdDetailSearchFallback(); addTransmissionButtons(); fixBhdSeriesSearchImdb().catch(e => console.debug('[Popcorn] BHD series IMDb search fix skipped', e)); fixBtnSearchImdbField().catch(e => console.debug('[Popcorn] BTN IMDb search fix skipped', e)); }, 2500);
-    setTimeout(() => { cleanupExclusiveStatus(); cleanupBhdTitleAndSearch(); addGpwFallbackDisplay(); cleanupPtpDetailTransferControls(); addChdDetailSearchFallback(); addTransmissionButtons(); cleanupBtnDuplicateTitles(); enhanceBtnSeriesTitleWithDouban().catch(e => console.debug('[Popcorn] BTN title Douban enhance skipped', e)); }, 5000);
+    setTimeout(() => { cleanupExclusiveStatus(); cleanupBhdTitleAndSearch(); fixBluTitleDouban().catch(e => console.debug('[Popcorn] BLU Douban enhance skipped', e)); addGpwFallbackDisplay(); cleanupPtpDetailTransferControls(); addChdDetailSearchFallback(); addTransmissionButtons(); fixBhdSeriesSearchImdb().catch(e => console.debug('[Popcorn] BHD series IMDb search fix skipped', e)); fixBtnSearchImdbField().catch(e => console.debug('[Popcorn] BTN IMDb search fix skipped', e)); }, 2500);
+    setTimeout(() => { cleanupExclusiveStatus(); cleanupBhdTitleAndSearch(); fixBluTitleDouban().catch(e => console.debug('[Popcorn] BLU Douban enhance skipped', e)); addGpwFallbackDisplay(); cleanupPtpDetailTransferControls(); addChdDetailSearchFallback(); addTransmissionButtons(); cleanupBtnDuplicateTitles(); enhanceBtnSeriesTitleWithDouban().catch(e => console.debug('[Popcorn] BTN title Douban enhance skipped', e)); }, 5000);
+    if (isBluHost()) {
+      [8000, 12000, 18000, 25000].forEach(ms => setTimeout(() => {
+        cleanupBluTransmissionControls();
+        addTransmissionButtons();
+        fixBluTitleDouban().catch(e => console.debug('[Popcorn] BLU Douban enhance retry skipped', e));
+      }, ms));
+    }
   }
   runSoon();
   try {
     let tmTimer = null;
     const mo = new MutationObserver(() => {
       clearTimeout(tmTimer);
-      tmTimer = setTimeout(addTransmissionButtons, 600);
+      tmTimer = setTimeout(() => {
+        addTransmissionButtons();
+        if (isBluHost()) fixBluTitleDouban().catch(e => console.debug('[Popcorn] BLU Douban enhance observer skipped', e));
+      }, 600);
     });
     mo.observe(document.documentElement || document.body, { childList:true, subtree:true });
   } catch (_) {}

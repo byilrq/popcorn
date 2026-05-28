@@ -23,8 +23,8 @@ function normalizeBackup(data) {
 }
 
 
-const AUTO_FEED_DEFAULT_QUICK_SEARCH_LIST = ["<a href=\"https://passthepopcorn.me/torrents.php?searchstr={imdbid}\" target=\"_blank\">PTP</a>", "<a href=\"https://beyond-hd.me/torrents?search={imdbid}\" target=\"_blank\">BHD</a>", "<a href=\"https://ptchdbits.co/torrents.php?incldead=0&spstate=0&inclbookmarked=0&search={imdbid}&search_area=4&search_mode=0\" target=\"_blank\">CHD</a>", "<a href=\"https://audiences.me/torrents.php?cat401=1&cat402=1&cat403=1&incldead=0&spstate=0&inclbookmarked=0&search={imdbid}&search_area=4\" target=\"_blank\">ADE</a>", "<a href=\"https://greatposterwall.com/torrents.php?searchstr={imdbid}\" target=\"_blank\">GPW</a>", "<a href=\"https://broadcasthe.net/torrents.php?action=advanced&searchstr=&searchtags=&tags_type=1&groupdesc=&imdbid={imdbid}\" target=\"_blank\">BTN</a>", "<a href=\"https://search.douban.com/movie/subject_search?search_text={imdbid}&cat=1002\" target=\"_blank\">豆瓣</a>"];
-const AUTO_FEED_DEFAULT_QUICK_SEARCH_KEYS = ["PTP", "BHD", "CHD", "ADE", "GPW", "BTN", "豆瓣"];
+const AUTO_FEED_DEFAULT_QUICK_SEARCH_LIST = ["<a href=\"https://passthepopcorn.me/torrents.php?searchstr={imdbid}\" target=\"_blank\">PTP</a>", "<a href=\"https://beyond-hd.me/torrents?search={imdbid}\" target=\"_blank\">BHD</a>", "<a href=\"https://blutopia.cc/torrents?imdbid={imdbno}&perPage=25&imdbId={imdbno}\" target=\"_blank\">BLU</a>", "<a href=\"https://ptchdbits.co/torrents.php?incldead=0&spstate=0&inclbookmarked=0&search={imdbid}&search_area=4&search_mode=0\" target=\"_blank\">CHD</a>", "<a href=\"https://audiences.me/torrents.php?cat401=1&cat402=1&cat403=1&incldead=0&spstate=0&inclbookmarked=0&search={imdbid}&search_area=4\" target=\"_blank\">ADE</a>", "<a href=\"https://greatposterwall.com/torrents.php?searchstr={imdbid}\" target=\"_blank\">GPW</a>", "<a href=\"https://broadcasthe.net/torrents.php?action=advanced&searchstr=&searchtags=&tags_type=1&groupdesc=&imdbid={imdbid}\" target=\"_blank\">BTN</a>", "<a href=\"https://search.douban.com/movie/subject_search?search_text={imdbid}&cat=1002\" target=\"_blank\">豆瓣</a>"];
+const AUTO_FEED_DEFAULT_QUICK_SEARCH_KEYS = ["PTP", "BHD", "BLU", "CHD", "ADE", "GPW", "BTN", "豆瓣"];
 
 const AUTO_FEED_CLEAN_SITE_ORDER = ["Audiences", "BHD", "BTN", "CHDBits", "GPW", "MTeam", "OPS", "OurBits", "PTP", "RED", "TTG"];
 const AUTO_FEED_CLEAN_SITE_INFO = {
@@ -99,7 +99,7 @@ async function cleanupStoredSiteLibrary() {
 }
 const AUTO_FEED_OLD_QUICK_SEARCH_KEYS = ["PTP", "BHD", "GPW"];
 
-const POPCORN_DEFAULT_TM_SITES = 'PTP,BHD,CHD,ADE,GPW,BTN';
+const POPCORN_DEFAULT_TM_SITES = 'PTP,BHD,BLU,CHD,ADE,GPW,BTN';
 const POPCORN_DEFAULT_SERIES_SITES = 'BHD,BTN,ADE';
 const POPCORN_DEFAULT_TM_CONFIG = {
   __popcorn_tm_enabled: 1,
@@ -134,10 +134,11 @@ function quickSearchKeyFromHtml(html) {
   const name = (nameMatch ? nameMatch[1] : '').trim().toLowerCase();
   const hrefMatch = text.match(/href=["']([^"']+)/i);
   const href = (hrefMatch ? hrefMatch[1] : '').toLowerCase();
-  const map = { ptp:'PTP', bhd:'BHD', chd:'CHD', chdbits:'CHD', ade:'ADE', audiences:'ADE', gpw:'GPW', btn:'BTN', douban:'豆瓣', '豆瓣':'豆瓣' };
+  const map = { ptp:'PTP', bhd:'BHD', blu:'BLU', chd:'CHD', chdbits:'CHD', ade:'ADE', audiences:'ADE', gpw:'GPW', btn:'BTN', douban:'豆瓣', '豆瓣':'豆瓣' };
   if (map[name]) return map[name];
   if (href.includes('passthepopcorn')) return 'PTP';
   if (href.includes('beyond-hd')) return 'BHD';
+  if (href.includes('blutopia')) return 'BLU';
   if (href.includes('chdbits') || href.includes('chddiy')) return 'CHD';
   if (href.includes('audiences')) return 'ADE';
   if (href.includes('greatposterwall')) return 'GPW';
@@ -185,7 +186,7 @@ function normalizeShowSearchStorageValue(value) {
   let parsed = value;
   if (typeof parsed === 'string') { try { parsed = JSON.parse(parsed); } catch { parsed = {}; } }
   parsed = parsed && typeof parsed === 'object' ? parsed : {};
-  return JSON.stringify({ PTP: parsed.PTP !== 0 ? 1 : 0, BHD: parsed.BHD !== 0 ? 1 : 0, CHD: parsed.CHD !== 0 ? 1 : 0, ADE: parsed.ADE !== 0 ? 1 : 0, GPW: parsed.GPW !== 0 ? 1 : 0, BTN: parsed.BTN !== 0 ? 1 : 0, '豆瓣': parsed['豆瓣'] !== 0 && parsed.Douban !== 0 ? 1 : 0 });
+  return JSON.stringify({ PTP: parsed.PTP !== 0 ? 1 : 0, BHD: parsed.BHD !== 0 ? 1 : 0, BLU: parsed.BLU !== 0 ? 1 : 0, CHD: parsed.CHD !== 0 ? 1 : 0, ADE: parsed.ADE !== 0 ? 1 : 0, GPW: parsed.GPW !== 0 ? 1 : 0, BTN: parsed.BTN !== 0 ? 1 : 0, '豆瓣': parsed['豆瓣'] !== 0 && parsed.Douban !== 0 ? 1 : 0 });
 }
 
 async function migrateShowSearchStorage() {
@@ -435,6 +436,7 @@ const AUTO_FEED_ALLOWED_HOSTS = [
   "audiences.me",
   "backup.landof.tv",
   "beyond-hd.me",
+  "blutopia.cc",
   "broadcasthe.net",
   "douban.com",
   "greatposterwall.com",
