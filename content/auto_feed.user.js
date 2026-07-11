@@ -4405,20 +4405,6 @@ function getJson(url, meta, callback) {
     });
 }
 
-var pt_icos = GM_getValue('pt_icos');
-if (pt_icos === undefined || if_new_site_added) {
-    try {
-        getJson('https://gitee.com/tomorrow505/auto-feed-helper/raw/master/sorted_pt_sites_icos.json', null, function(data) {
-            GM_setValue('pt_icos', data.data);
-            location.reload();
-        });
-    } catch (err) {
-        GM_setValue('pt_icos', '{}');
-        location.reload();
-    }
-} else {
-    pt_icos = JSON.parse(decodeURIComponent(escape(atob(pt_icos))));
-}
 
 function getData(imdb_url, callback) {
     var imdb_id = imdb_url.match(/tt\d+/)[0];
@@ -13036,25 +13022,15 @@ function auto_feed() {
                 forward_r.appendChild(para);
                 para.target = "_blank"; para.id = key;
 
-                if (Object.keys(pt_icos).length === 0 || pt_icos[key] === undefined) {
-                    img_url = used_site_info[key].url + 'favicon.ico';
-                    if (origin_site != 'mam') {
-                        img_url_wsrv = 'https://wsrv.nl/?url=' + img_url;
-                    } else {
-                        img_url_wsrv = img_url;
-                    }
-                    para.innerHTML = '<div style="display:inline-block; margin-bottom: 2px;"><img src="' + img_url_wsrv +
-                                    '"onerror="this.onerror=null; this.src=' + "'" + img_url + "'" +
-                                    '"class="round_icon" style="display:inline-block">' + key + '</div>';
+                img_url = used_site_info[key].url + 'favicon.ico';
+                if (origin_site != 'mam') {
+                    img_url_wsrv = 'https://wsrv.nl/?url=' + img_url;
                 } else {
-                    if (pt_icos[key] == 'default') {
-                        para.innerHTML = '<div style="display:inline-block; margin-bottom: 2px;"><img src="' + pt_icos['default'] +
-                        '"class="round_icon" style="display:inline-block">' + key + '</div>';
-                    } else {
-                        para.innerHTML = '<div style="display:inline-block; margin-bottom: 2px;"><img src="' + pt_icos[key] +
-                        '"class="round_icon" style="display:inline-block">' + key + '</div>';
-                    }
+                    img_url_wsrv = img_url;
                 }
+                para.innerHTML = '<div style="display:inline-block; margin-bottom: 2px;"><img src="' + img_url_wsrv +
+                                '"onerror="this.onerror=null; this.src=' + "'" + img_url + "'" +
+                                '"class="round_icon" style="display:inline-block">' + key + '</div>';
 
             }
         }
@@ -13884,15 +13860,7 @@ function auto_feed() {
 
         if ($('#refresh_icos').length) {
             $('#refresh_icos')[0].addEventListener('click', function(e){
-                try {
-                    getJson('https://gitee.com/tomorrow505/auto-feed-helper/raw/master/sorted_pt_sites_icos.json', null, function(data) {
-                        GM_setValue('pt_icos', data.data);
-                        location.reload();
-                    });
-                } catch (err) {
-                    GM_setValue('pt_icos', '{}');
-                    location.reload();
-                }
+                location.reload();
             }, false);
         }
 

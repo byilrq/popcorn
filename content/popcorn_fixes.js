@@ -508,6 +508,8 @@
   }
   async function fixBluTitleDouban() {
     if (!isBluDetailPage()) return;
+    // Skip Douban info injection on single torrent detail pages — user wants clean layout.
+    if (isBluTorrentDetailPage()) return;
     const titleEl = await waitForCondition(() => findBluTitleElement(), 20000, 300);
     const info = await getBluDoubanInfo(titleEl).catch(() => null);
     if (!info || (!info.average && !info.title && !info.summary)) return;
@@ -630,27 +632,61 @@
   }
 
 
-  function cleanupPtpDetailTransferControls() {
-    if (!/^https?:\/\/passthepopcorn\.me\/torrents\.php\?id=/i.test(location.href)) return;
+  function cleanupAllDoubanControls() {
+    // 通用清理：移除所有站点转发面板中的豆瓣信息（网址）、检索名称、API、ptgen跳转、点击获取等冗余控件
+    // 只保留"转发种子"等核心转发功能。这些控件在转发流程中基本无用，且影响页面加载和布局。
     const ids = ['input_box','search_button','douban_api','ptgen_button','douban_button','download_pngs','select_img'];
     ids.forEach(id => {
       const el = document.getElementById(id);
       if (!el) return;
-      const parent = el.parentNode;
-      try { el.remove(); } catch (_) {}
-      if (parent) {
-        Array.from(parent.childNodes || []).forEach(n => {
-          if (n.nodeType === 3 && /^\s*(API|API接口|豆瓣网址|检索名称|ptgen跳转|获取成功|转存截图)\s*$/i.test(n.nodeValue || '')) {
-            try { n.remove(); } catch (_) {}
-          }
-        });
-      }
+      try {
+        const parent = el.parentNode;
+        el.remove();
+        if (parent) {
+          // 清理标签文本节点
+          Array.from(parent.childNodes || []).forEach(n => {
+            if (n.nodeType === 3 && /^\s*(API|API接口|豆瓣网址|检索名称|ptgen跳转|获取成功|转存截图)\s*$/i.test(n.nodeValue || '')) {
+              try { n.remove(); } catch (_) {}
+            }
+          });
+          // 清理 checkbox（douban_api 是 checkbox，可能 label 残留）
+          Array.from(parent.querySelectorAll('input[type="checkbox"]')).forEach(cb => {
+            if (cb.id === 'douban_api' || (cb.parentNode === parent && !parent.querySelector('label[for="' + cb.id + '"]'))) {
+              try { cb.remove(); } catch (_) {}
+            }
+          });
+        }
+      } catch (_) {}
     });
-    Array.from(document.querySelectorAll('input[type="button"],button')).forEach(el => {
+    // 按 value/文字匹配清理按钮
+    Array.from(document.querySelectorAll('input[type="button"], button')).forEach(el => {
       const v = (el.value || el.textContent || '').trim();
       if (/^(检索名称|ptgen跳转|点击获取|获取成功|获取失败|获取中……|转存截图|处理中…)$/.test(v)) {
         try { el.remove(); } catch (_) {}
       }
+    });
+    // 清理"豆瓣信息"标签表结构（douban_box 中的左侧标签）
+    document.querySelectorAll('td, th, div, span').forEach(el => {
+      const t = (el.textContent || '').replace(/\s+/g, ' ').trim();
+      if (t === '豆瓣信息' && !el.querySelector('input, button, a, select, textarea')) {
+        const row = el.closest('tr, .row, div');
+        if (row) {
+          try { row.remove(); } catch (_) {}
+        } else {
+          try { el.remove(); } catch (_) {}
+        }
+      }
+    });
+    // 清理残留的"API"文字标签（checkbox 旁边的文本节点）
+    document.querySelectorAll('td, th, div, span, form').forEach(el => {
+      Array.from(el.childNodes || []).forEach(n => {
+        if (n.nodeType === 3) {
+          let v = n.nodeValue || '';
+          const orig = v;
+          v = v.replace(/\s*\bAPI\b\s*/g, ' ').replace(/\s{2,}/g, ' ');
+          if (v !== orig) n.nodeValue = v;
+        }
+      });
     });
   }
 
@@ -1647,6 +1683,21 @@
   function addBluTmOnlyButtons() {
     if (!isBluHost()) return;
     cleanupBluTransmissionControls();
+    // On single torrent detail pages, skip TM/TV entirely — only keep 转发种子.
+    // The extra TM buttons clutter the layout and cause repeated API calls.
+    if (isBluTorrentDetailPage()) {
+      Array.from(document.querySelectorAll('.popcorn-tm-blu-detail-tm, .popcorn-tm-btn')).forEach(el => {
+        try { el.remove(); } catch (_) {}
+      });
+      Array.from(document.querySelectorAll('td,th,div,span,form')).forEach(el => {
+        Array.from(el.childNodes || []).forEach(n => {
+          if (n.nodeType === 3 && /TM\s*\|\s*TV\s*\|?/i.test(n.nodeValue || '')) {
+            n.nodeValue = String(n.nodeValue || '').replace(/\s*TM\s*\|\s*TV\s*\|?\s*/ig, ' ').replace(/\s{2,}/g, ' ');
+          }
+        });
+      });
+      return;
+    }
     const controls = findBluDownloadControls();
     controls.forEach(dl => {
       const parent = dl.parentNode || (dl.closest && dl.closest('form,td,th,div,span'));
@@ -1812,7 +1863,7 @@
     cleanupBhdTitleAndSearch();
     fixBluTitleDouban().catch(e => console.debug('[Popcorn] BLU Douban enhance skipped', e));
     addGpwFallbackDisplay();
-    cleanupPtpDetailTransferControls();
+    cleanupAllDoubanControls();
     addChdDetailSearchFallback();
     addTransmissionButtons();
     setTimeout(() => {
@@ -1828,17 +1879,20 @@
       fixBtnSeriesDouban().catch(e => console.debug('[Popcorn] BTN Douban fix skipped', e));
       enhanceBtnSeriesTitleWithDouban().catch(e => console.debug('[Popcorn] BTN title Douban enhance skipped', e));
       addGpwFallbackDisplay();
-      cleanupPtpDetailTransferControls();
+      cleanupAllDoubanControls();
       addChdDetailSearchFallback();
       addTransmissionButtons();
     }, 800);
-    setTimeout(() => { cleanupExclusiveStatus(); cleanupBhdTitleAndSearch(); fixBluTitleDouban().catch(e => console.debug('[Popcorn] BLU Douban enhance skipped', e)); addGpwFallbackDisplay(); cleanupPtpDetailTransferControls(); addChdDetailSearchFallback(); addTransmissionButtons(); fixBhdSeriesSearchImdb().catch(e => console.debug('[Popcorn] BHD series IMDb search fix skipped', e)); fixBtnSearchImdbField().catch(e => console.debug('[Popcorn] BTN IMDb search fix skipped', e)); }, 2500);
-    setTimeout(() => { cleanupExclusiveStatus(); cleanupBhdTitleAndSearch(); fixBluTitleDouban().catch(e => console.debug('[Popcorn] BLU Douban enhance skipped', e)); addGpwFallbackDisplay(); cleanupPtpDetailTransferControls(); addChdDetailSearchFallback(); addTransmissionButtons(); cleanupBtnDuplicateTitles(); enhanceBtnSeriesTitleWithDouban().catch(e => console.debug('[Popcorn] BTN title Douban enhance skipped', e)); }, 5000);
+    setTimeout(() => { cleanupExclusiveStatus(); cleanupBhdTitleAndSearch(); fixBluTitleDouban().catch(e => console.debug('[Popcorn] BLU Douban enhance skipped', e)); addGpwFallbackDisplay(); cleanupAllDoubanControls(); addChdDetailSearchFallback(); addTransmissionButtons(); fixBhdSeriesSearchImdb().catch(e => console.debug('[Popcorn] BHD series IMDb search fix skipped', e)); fixBtnSearchImdbField().catch(e => console.debug('[Popcorn] BTN IMDb search fix skipped', e)); }, 2500);
+    setTimeout(() => { cleanupExclusiveStatus(); cleanupBhdTitleAndSearch(); fixBluTitleDouban().catch(e => console.debug('[Popcorn] BLU Douban enhance skipped', e)); addGpwFallbackDisplay(); cleanupAllDoubanControls(); addChdDetailSearchFallback(); addTransmissionButtons(); cleanupBtnDuplicateTitles(); enhanceBtnSeriesTitleWithDouban().catch(e => console.debug('[Popcorn] BTN title Douban enhance skipped', e)); }, 5000);
     if (isBluHost()) {
       [8000, 12000, 18000, 25000].forEach(ms => setTimeout(() => {
         cleanupBluTransmissionControls();
-        addTransmissionButtons();
-        fixBluTitleDouban().catch(e => console.debug('[Popcorn] BLU Douban enhance retry skipped', e));
+        cleanupAllDoubanControls();
+        if (!isBluTorrentDetailPage()) {
+          addTransmissionButtons();
+          fixBluTitleDouban().catch(e => console.debug('[Popcorn] BLU Douban enhance retry skipped', e));
+        }
       }, ms));
     }
   }
@@ -1848,6 +1902,7 @@
     const mo = new MutationObserver(() => {
       clearTimeout(tmTimer);
       tmTimer = setTimeout(() => {
+        cleanupAllDoubanControls();
         addTransmissionButtons();
         if (isBluHost()) fixBluTitleDouban().catch(e => console.debug('[Popcorn] BLU Douban enhance observer skipped', e));
       }, 600);
