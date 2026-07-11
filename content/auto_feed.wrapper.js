@@ -13014,7 +13014,7 @@ function auto_feed() {
         var img_url, key;
         for (index=0; index < site_order.length; index++) {
             var key = site_order[index];
-            if (popcorn_is_forward_site(key) && used_site_info[key].enable) {
+            if (popcorn_is_forward_site(key) && used_site_info[key].enable && show_search_urls[key]) {
                 if (forward_r.innerHTML) {
                     forward_r.innerHTML = forward_r.innerHTML + ' | ';
                 }

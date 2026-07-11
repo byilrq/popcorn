@@ -76,6 +76,21 @@
   function cacheSetJson(key, value) {
     try { if (value) localStorage.setItem(key, JSON.stringify({ at: Date.now(), value })); } catch (_) {}
   }
+  function clearExpiredDoubanCache() {
+    try {
+      const now = Date.now();
+      const cacheExpiry = 3600000; // 1小时过期
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (key && key.startsWith('popcorn_douban_')) {
+          const cached = JSON.parse(localStorage.getItem(key) || 'null');
+          if (cached && cached.at && (now - cached.at) > cacheExpiry) {
+            localStorage.removeItem(key);
+          }
+        }
+      }
+    } catch (_) {}
+  }
   function parseHtml(html) { return new DOMParser().parseFromString(text(html), 'text/html'); }
   function firstNumber() {
     for (let i = 0; i < arguments.length; i++) {
@@ -496,7 +511,10 @@
   function bluHasChineseSummary() {
     return !!document.querySelector('[data-popcorn-blu-summary-done="1"]');
   }
-  async function getBluDoubanInfo(titleEl) {
+  async function getBluDoubanInfo(titleEl, clearCache = false) {
+    if (clearCache) {
+      bluDoubanInfoPromise = null;
+    }
     if (bluDoubanInfoPromise) return bluDoubanInfoPromise;
     bluDoubanInfoPromise = (async () => {
       const imdb = await waitForCondition(() => getPageImdbId(document), 20000, 300);
@@ -508,8 +526,6 @@
   }
   async function fixBluTitleDouban() {
     if (!isBluDetailPage()) return;
-    // Skip Douban info injection on single torrent detail pages — user wants clean layout.
-    if (isBluTorrentDetailPage()) return;
     const titleEl = await waitForCondition(() => findBluTitleElement(), 20000, 300);
     const info = await getBluDoubanInfo(titleEl).catch(() => null);
     if (!info || (!info.average && !info.title && !info.summary)) return;
@@ -1856,6 +1872,7 @@
     document.querySelectorAll('#checking').forEach(el => { try { el.remove(); } catch (_) {} });
   }
   function runSoon() {
+    clearExpiredDoubanCache();
     rewriteDoubanBhdLinks();
     rewriteDoubanBtnLinks();
     rewriteDoubanSelectedSeriesLinks().catch(e => console.debug('[Popcorn] selected Douban series IMDb normalize skipped', e));
@@ -1883,15 +1900,23 @@
       addChdDetailSearchFallback();
       addTransmissionButtons();
     }, 800);
-    setTimeout(() => { cleanupExclusiveStatus(); cleanupBhdTitleAndSearch(); fixBluTitleDouban().catch(e => console.debug('[Popcorn] BLU Douban enhance skipped', e)); addGpwFallbackDisplay(); cleanupAllDoubanControls(); addChdDetailSearchFallback(); addTransmissionButtons(); fixBhdSeriesSearchImdb().catch(e => console.debug('[Popcorn] BHD series IMDb search fix skipped', e)); fixBtnSearchImdbField().catch(e => console.debug('[Popcorn] BTN IMDb search fix skipped', e)); }, 2500);
-    setTimeout(() => { cleanupExclusiveStatus(); cleanupBhdTitleAndSearch(); fixBluTitleDouban().catch(e => console.debug('[Popcorn] BLU Douban enhance skipped', e)); addGpwFallbackDisplay(); cleanupAllDoubanControls(); addChdDetailSearchFallback(); addTransmissionButtons(); cleanupBtnDuplicateTitles(); enhanceBtnSeriesTitleWithDouban().catch(e => console.debug('[Popcorn] BTN title Douban enhance skipped', e)); }, 5000);
+    // 增加 2 次额外重试确保豆瓣信息稳定同步
+    setTimeout(() => { fixBhdTitleDouban().catch(e => console.debug('[Popcorn] BHD Douban retry 1 skipped', e)); fixBluTitleDouban().catch(e => console.debug('[Popcorn] BLU Douban retry 1 skipped', e)); fixBtnSeriesDouban().catch(e => console.debug('[Popcorn] BTN Douban retry 1 skipped', e)); }, 2500);
+    setTimeout(() => { fixBhdTitleDouban().catch(e => console.debug('[Popcorn] BHD Douban retry 2 skipped', e)); fixBluTitleDouban().catch(e => console.debug('[Popcorn] BLU Douban retry 2 skipped', e)); fixBtnSeriesDouban().catch(e => console.debug('[Popcorn] BTN Douban retry 2 skipped', e)); }, 5000);
     if (isBluHost()) {
       [8000, 12000, 18000, 25000].forEach(ms => setTimeout(() => {
         cleanupBluTransmissionControls();
         cleanupAllDoubanControls();
-        if (!isBluTorrentDetailPage()) {
-          addTransmissionButtons();
-          fixBluTitleDouban().catch(e => console.debug('[Popcorn] BLU Douban enhance retry skipped', e));
+        addTransmissionButtons();
+        // BLU 每次重试都强制清空缓存，确保豆瓣信息稳定同步
+        const titleEl = findBluTitleElement();
+        if (titleEl) {
+          getBluDoubanInfo(titleEl, true).then(info => {
+            if (info && (info.average || info.title || info.summary)) {
+              if (!bluHasTitleInfo()) applyBluTitleInfo(titleEl, info);
+              if (!bluHasChineseSummary()) applyBluChineseSummary(info);
+            }
+          }).catch(e => console.debug('[Popcorn] BLU Douban retry failed', e));
         }
       }, ms));
     }
