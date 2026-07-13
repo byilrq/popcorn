@@ -1575,17 +1575,44 @@
       const torrentUrl = new URL(href, location.href).href;
       btn.textContent = label + '...';
       btn.classList.add('is-working');
-      const result = await popcornExtRequest('transmission_add', { torrentUrl, target: target === 'tv' ? 'tv' : 'movie' });
+
+      // 先尝试外网(WAN)，失败后尝试局域网(LAN)
+      let result = null;
+      let lastError = null;
+      const addresses = ['wan', 'lan']; // 默认先外网后局域网
+
+      for (const address of addresses) {
+        try {
+          result = await popcornExtRequest('transmission_add', {
+            torrentUrl,
+            target: target === 'tv' ? 'tv' : 'movie',
+            address: address // 指定使用 WAN 或 LAN 地址
+          });
+          // 推送成功，停止尝试另一个地址
+          break;
+        } catch (e) {
+          lastError = e;
+          // 本地址失败，继续尝试下一个
+          continue;
+        }
+      }
+
+      // 如果所有地址都失败，抛出最后一个错误
+      if (!result && lastError) {
+        throw lastError;
+      }
+
       btn.classList.remove('is-working');
       btn.classList.add('is-ok');
+      const addressLabel = result && result.address === 'wan' ? ' (外网)' : result && result.address === 'lan' ? ' (局域网)' : '';
       btn.textContent = result && result.status === 'duplicate' ? '已存在' : '已推送';
-      btn.title = result && result.name ? result.name : '已推送到 Transmission';
+      btn.title = (result && result.name ? result.name : '已推送到 Transmission') + addressLabel;
       setTimeout(() => { btn.textContent = old; btn.classList.remove('is-ok'); }, 5000);
     } catch (e) {
       btn.classList.remove('is-working');
       btn.classList.add('is-bad');
       btn.textContent = '失败';
-      btn.title = String(e && e.message || e);
+      btn.title = '外网和局域网都推送失败';
       setTimeout(() => { btn.textContent = old; btn.classList.remove('is-bad'); }, 8000);
     }
   }

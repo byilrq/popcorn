@@ -105,14 +105,13 @@ const POPCORN_DEFAULT_TM_CONFIG = {
   __popcorn_tm_enabled: 1,
   __popcorn_tm_rpc_lan: 'http://192.168.31.6:9091',
   __popcorn_tm_rpc_wan: 'http://域名:9091',
-  __popcorn_tm_rpc_mode: 'wan',
   __popcorn_tm_movie_dir: '/mv',
   __popcorn_tm_tv_dir: '/tv',
   __popcorn_tm_download_dir: '/mv'
 };
 
 async function migratePopcornDefaults() {
-  const keys = ['__popcorn_tm_enabled','__popcorn_tm_rpc_lan','__popcorn_tm_rpc_wan','__popcorn_tm_rpc_mode','__popcorn_tm_movie_dir','__popcorn_tm_tv_dir','__popcorn_tm_download_dir','__popcorn_tm_sites','__popcorn_series_search_sites','__popcorn_dark_background_sites'];
+  const keys = ['__popcorn_tm_enabled','__popcorn_tm_rpc_lan','__popcorn_tm_rpc_wan','__popcorn_tm_movie_dir','__popcorn_tm_tv_dir','__popcorn_tm_download_dir','__popcorn_tm_sites','__popcorn_series_search_sites','__popcorn_dark_background_sites'];
   const data = await chrome.storage.local.get(keys);
   const updates = {};
   for (const [k,v] of Object.entries(POPCORN_DEFAULT_TM_CONFIG)) {
@@ -648,15 +647,13 @@ async function addTorrentToTransmission(payload) {
   const store = await chrome.storage.local.get([
     '__popcorn_tm_rpc_lan',
     '__popcorn_tm_rpc_wan',
-    '__popcorn_tm_rpc_mode',
     '__popcorn_tm_username',
     '__popcorn_tm_password',
     '__popcorn_tm_download_dir',
     '__popcorn_tm_movie_dir',
     '__popcorn_tm_tv_dir'
   ]);
-  const mode = store.__popcorn_tm_rpc_mode === 'lan' ? 'lan' : 'wan';
-  const rpcUrl = mode === 'wan' ? store.__popcorn_tm_rpc_wan : store.__popcorn_tm_rpc_lan;
+
   const metainfo = await fetchTorrentAsBase64(payload && payload.torrentUrl);
   const args = { metainfo };
   const target = payload && payload.target === 'tv' ? 'tv' : 'movie';
@@ -665,15 +662,41 @@ async function addTorrentToTransmission(payload) {
   const tvDir = String(store.__popcorn_tm_tv_dir || '').trim();
   const dir = target === 'tv' ? tvDir : movieDir;
   if (dir) args['download-dir'] = dir;
-  const json = await transmissionRpcCall({
-    rpcUrl,
-    username: store.__popcorn_tm_username,
-    password: store.__popcorn_tm_password
-  }, { method:'torrent-add', arguments: args });
-  const a = json.arguments || {};
-  if (a['torrent-duplicate']) return { status:'duplicate', name:a['torrent-duplicate'].name || '' };
-  if (a['torrent-added']) return { status:'added', name:a['torrent-added'].name || '' };
-  return { status:'success' };
+
+  // 根据 payload.address 参数决定使用哪个地址，或尝试两个都用
+  const addresses = [];
+  if (payload && payload.address === 'wan') {
+    addresses.push({ type: 'wan', url: store.__popcorn_tm_rpc_wan });
+  } else if (payload && payload.address === 'lan') {
+    addresses.push({ type: 'lan', url: store.__popcorn_tm_rpc_lan });
+  } else {
+    // 默认先外网后局域网
+    addresses.push({ type: 'wan', url: store.__popcorn_tm_rpc_wan });
+    addresses.push({ type: 'lan', url: store.__popcorn_tm_rpc_lan });
+  }
+
+  let lastError = null;
+  for (const addr of addresses) {
+    try {
+      if (!addr.url || String(addr.url).trim() === '') continue;
+      const json = await transmissionRpcCall({
+        rpcUrl: addr.url,
+        username: store.__popcorn_tm_username,
+        password: store.__popcorn_tm_password
+      }, { method:'torrent-add', arguments: args });
+      const a = json.arguments || {};
+      if (a['torrent-duplicate']) return { status:'duplicate', name:a['torrent-duplicate'].name || '', address:addr.type };
+      if (a['torrent-added']) return { status:'added', name:a['torrent-added'].name || '', address:addr.type };
+      return { status:'success', address:addr.type };
+    } catch (e) {
+      lastError = e;
+      // 继续尝试下一个地址
+      continue;
+    }
+  }
+
+  // 所有地址都失败
+  throw lastError || new Error('没有可用的 Transmission RPC 地址');
 }
 
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {

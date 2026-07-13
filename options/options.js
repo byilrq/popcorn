@@ -206,7 +206,6 @@ function defaultsState(data){
     enabled: data.__popcorn_tm_enabled === undefined ? true : !!num(data.__popcorn_tm_enabled, 1),
     rpcLan: data.__popcorn_tm_rpc_lan || 'http://192.168.31.6:9091',
     rpcWan: data.__popcorn_tm_rpc_wan || 'http://域名:9091',
-    rpcMode: data.__popcorn_tm_rpc_mode || 'wan',
     username: data.__popcorn_tm_username || '',
     password: data.__popcorn_tm_password || '',
     movieDir: data.__popcorn_tm_movie_dir || data.__popcorn_tm_download_dir || '/mv',
@@ -256,16 +255,14 @@ function renderTransmissionSites(st){
 function setTransmissionEditing(editing){
   const panel = document.querySelector('.tm-panel');
   if (panel) panel.classList.toggle('editing', !!editing);
-  ['tm_rpc_lan','tm_rpc_wan','tm_rpc_mode','tm_movie_dir','tm_tv_dir','tm_username','tm_password'].forEach(id => { const el=$(id); if (el) el.disabled = !editing; });
+  ['tm_rpc_lan','tm_rpc_wan','tm_movie_dir','tm_tv_dir','tm_username','tm_password'].forEach(id => { const el=$(id); if (el) el.disabled = !editing; });
   const btn = $('tm_edit_save');
   if (btn) { btn.textContent = editing ? '保存' : '修改'; btn.dataset.editing = editing ? '1' : '0'; }
 }
 function renderTransmissionConfig(st){
   const cfg = st.tmConfig || {};
-  if (!$('tm_rpc_mode')) return;
   $('tm_rpc_lan').value = cfg.rpcLan || '';
   $('tm_rpc_wan').value = cfg.rpcWan || '';
-  $('tm_rpc_mode').value = cfg.rpcMode === 'lan' ? 'lan' : 'wan';
   $('tm_username').value = cfg.username || '';
   $('tm_password').value = cfg.password || '';
   $('tm_movie_dir').value = cfg.movieDir || '';
@@ -385,7 +382,6 @@ function collect(){
   data.__popcorn_tm_enabled = 1;
   data.__popcorn_tm_rpc_lan = $('tm_rpc_lan') ? $('tm_rpc_lan').value.trim() : '';
   data.__popcorn_tm_rpc_wan = $('tm_rpc_wan') ? $('tm_rpc_wan').value.trim() : '';
-  data.__popcorn_tm_rpc_mode = $('tm_rpc_mode') ? $('tm_rpc_mode').value : 'wan';
   data.__popcorn_tm_username = $('tm_username') ? $('tm_username').value.trim() : '';
   data.__popcorn_tm_password = $('tm_password') ? $('tm_password').value : '';
   data.__popcorn_tm_movie_dir = $('tm_movie_dir') ? $('tm_movie_dir').value.trim() : '';
@@ -512,7 +508,6 @@ async function saveTransmissionConfigOnly(){
     __popcorn_tm_enabled: 1,
     __popcorn_tm_rpc_lan: data.__popcorn_tm_rpc_lan,
     __popcorn_tm_rpc_wan: data.__popcorn_tm_rpc_wan,
-    __popcorn_tm_rpc_mode: data.__popcorn_tm_rpc_mode || 'wan',
     __popcorn_tm_username: data.__popcorn_tm_username,
     __popcorn_tm_password: data.__popcorn_tm_password,
     __popcorn_tm_download_dir: data.__popcorn_tm_download_dir,
