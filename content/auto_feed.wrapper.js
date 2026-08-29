@@ -1655,6 +1655,12 @@ function add_search_urls(container, imdbid, imdbno, search_name, mode) {
     var brs = '</br></br>';
     var font_color = 'red';
     var font_size = '';
+    var use_dark_search = auto_feed_is_dark_background_site();
+    try {
+        if (container && container.closest && container.closest('.popcorn-gazelle-transfer-wrap').length) {
+            use_dark_search = true;
+        }
+    } catch (err) {}
     if (mode == 1) {
         div_style = '';  font_color = 'green'; text = ''; brs = '</br>';
         if (site_url.match(/^https:\/\/www.imdb.com\/title\/tt\d+/)) {
@@ -1722,9 +1728,19 @@ function add_search_urls(container, imdbid, imdbno, search_name, mode) {
         }
     }
     site_search_lists = site_search_lists.format({'imdbid': imdbid, 'imdbno': imdbno, 'search_name': search_name});
-    if (auto_feed_is_dark_background_site()) {
+    if (use_dark_search) {
         container.append(`${brs}<div align="center" style="border: 1px solid #0b57ff;background:#004ccf;line-height:1.45;padding:5px 8px;" class="search_urls popcorn-dark-search-urls"><span style="color:red;font-weight:bold;">${text}</span><span class="popcorn-dark-search-links">${site_search_lists}</span></div>`);
         auto_feed_apply_dark_search_style(container);
+        // PTP / GPW use the same compact dark quick-search presentation as BHD, but only
+        // inside the per-torrent forwarding panel (never on the group-wide torrent list).
+        try {
+            container.find('.popcorn-dark-search-urls, .popcorn-dark-search-links').css({'color':'#c7ccd1'});
+            container.find('.popcorn-dark-search-urls a, .popcorn-dark-search-links a').each(function(){
+                this.style.setProperty('color', '#d7dbe0', 'important');
+                this.style.setProperty('text-decoration', 'none', 'important');
+                this.style.setProperty('font-weight', '600', 'important');
+            });
+        } catch (err) {}
     } else {
         container.append(`${brs}<div ${div_style} class="search_urls"><font ${font_size} color=${font_color}>${text}${site_search_lists}</font></div>`);
     }
@@ -2129,6 +2145,135 @@ function domToString (node) {
     return str;
 }
 
+// Gazelle (PTP / GPW): resolve the torrent whose detail panel is currently open.
+// Group pages can expand a single torrent without adding torrentid to the URL, so the
+// forwarding UI must be driven by the expanded detail row instead of the whole group page.
+function popcorn_gazelle_detail_id(site, node) {
+    if (!node || node.nodeType !== 1) return '';
+    var patterns = site == 'PTP'
+        ? [/^torrent_(\d+)$/i, /^torrent_detail_(\d+)$/i]
+        : [/^torrent_detail_(\d+)$/i, /^torrent_(\d+)$/i];
+    var id = String(node.id || '');
+    for (var i = 0; i < patterns.length; i++) {
+        var m = id.match(patterns[i]);
+        if (m) return m[1];
+    }
+    return '';
+}
+
+function popcorn_gazelle_is_visible(el) {
+    if (!el || el.nodeType !== 1 || el.hidden) return false;
+    try {
+        var style = window.getComputedStyle(el);
+        if (style.display == 'none' || style.visibility == 'hidden') return false;
+    } catch (err) {}
+    try {
+        if (!el.getClientRects || !el.getClientRects().length) return false;
+    } catch (err) {}
+    return true;
+}
+
+function popcorn_gazelle_open_torrent_id(site) {
+    if (site != 'PTP' && site != 'GPW') return '';
+    // PTP detail rows are torrent_<id>; GPW detail rows are torrent_detail_<id>.
+    // Do not treat GPW torrent_<id> header rows as opened details, otherwise every row on
+    // the group page would look like an active torrent.
+    var selector = site == 'PTP'
+        ? '[id^="torrent_"]'
+        : '[id^="torrent_detail_"]';
+    var nodes = Array.from(document.querySelectorAll(selector));
+    var visible = [];
+    for (var i = 0; i < nodes.length; i++) {
+        var id = popcorn_gazelle_detail_id(site, nodes[i]);
+        if (!id || !popcorn_gazelle_is_visible(nodes[i])) continue;
+        visible.push({id: id, node: nodes[i]});
+    }
+    if (!visible.length) return '';
+
+    // Prefer a newly-opened detail panel that does not have Popcorn controls yet.
+    for (var j = visible.length - 1; j >= 0; j--) {
+        if (!visible[j].node.querySelector('.popcorn-gazelle-transfer-wrap')) return visible[j].id;
+    }
+
+    // If every visible panel already has controls, prefer the last visible one.
+    return visible[visible.length - 1].id;
+}
+
+function popcorn_gazelle_resolve_torrent_id(site) {
+    var open_id = popcorn_gazelle_open_torrent_id(site);
+    if (open_id) return open_id;
+    var m = String(site_url || '').match(/[?&]torrentid=(\d+)/i);
+    return m ? m[1] : '';
+}
+
+function popcorn_reset_gazelle_raw_info() {
+    // auto_feed can run more than once on a Gazelle group page as different torrents are
+    // expanded. Clear per-torrent state so data from the previous release cannot leak into
+    // the next forwarding payload.
+    raw_info.name = '';
+    raw_info.small_descr = '';
+    raw_info.descr = '';
+    raw_info.torrent_name = '';
+    raw_info.torrent_url = '';
+    raw_info.edition_info = '';
+    raw_info.comparisons = '';
+    raw_info.version_info = '';
+    raw_info.multi_mediainfo = '';
+    raw_info.full_mediainfo = '';
+    raw_info.images = [];
+    raw_info.subtitles = [];
+    raw_info.golden_torrent = false;
+    raw_info.source_sel = '';
+    raw_info.standard_sel = '';
+    raw_info.audiocodec_sel = '';
+    raw_info.codec_sel = '';
+    raw_info.medium_sel = '';
+}
+
+function popcorn_mount_gazelle_transfer_row(site, torrent_id) {
+    if ((site != 'PTP' && site != 'GPW') || !torrent_id) return null;
+    var ids = site == 'PTP'
+        ? ['torrent_' + torrent_id, 'torrent_detail_' + torrent_id]
+        : ['torrent_detail_' + torrent_id, 'torrent_' + torrent_id];
+    var host = null;
+    for (var i = 0; i < ids.length && !host; i++) host = document.getElementById(ids[i]);
+    if (!host) return null;
+
+    var finished = host.querySelector('.popcorn-gazelle-transfer-wrap[data-torrent-id="' + torrent_id + '"] #forward_r');
+    if (finished) return {done: true, host: host};
+
+    // The forwarding code uses legacy global element IDs (forward_r, search_type, target-site
+    // IDs), therefore keep exactly one active Gazelle forwarding panel at a time.
+    document.querySelectorAll('.popcorn-gazelle-transfer-wrap').forEach(function(el) {
+        try { el.remove(); } catch (err) {}
+    });
+
+    var container = host;
+    if (String(host.tagName || '').toUpperCase() == 'TR') {
+        container = Array.from(host.children || []).find(function(el) {
+            var tag = String(el.tagName || '').toUpperCase();
+            return tag == 'TD' || tag == 'TH';
+        }) || null;
+    }
+    if (!container) return null;
+
+    var wrap = document.createElement('div');
+    wrap.className = 'popcorn-gazelle-transfer-wrap';
+    wrap.setAttribute('data-torrent-id', torrent_id);
+    wrap.style.cssText = 'width:100%;box-sizing:border-box;margin-top:12px;clear:both;';
+
+    var table = document.createElement('table');
+    table.className = 'popcorn-gazelle-transfer-table';
+    table.style.cssText = 'width:100%;border-collapse:collapse;table-layout:auto;background:transparent;';
+    var body = document.createElement('tbody');
+    table.appendChild(body);
+    wrap.appendChild(table);
+    if (container.firstChild) container.insertBefore(wrap, container.firstChild);
+    else container.appendChild(wrap);
+
+    return {done: false, host: host, wrap: wrap, row: body.insertRow(0)};
+}
+
 //方便进行判断是否是源站点，不然太长了,属于源站点进入逻辑业务层
 function judge_if_the_site_as_source() {
     if (site_url.match(/^https:\/\/removed-kg.invalid\/upload\.php.*/)) {
@@ -2204,6 +2349,12 @@ function judge_if_the_site_as_source() {
         return 1;
     }
     if (site_url.match(/^http(s*):\/\/(passthepopcorn.me|tv-vault.me|broadcasthe.net|backup.landof.tv|greatposterwall.com|sugoimusic.me).*torrentid.*/i)) {
+        return 1;
+    }
+    // PTP / GPW can expand a torrent inline while the URL remains torrents.php?id=... .
+    // Treat the page as a source only when a concrete torrent detail panel is actually open.
+    if (site_url.match(/^https?:\/\/(passthepopcorn.me|greatposterwall.com)\/torrents\.php\?[^#]*\bid=\d+/i) &&
+        popcorn_gazelle_open_torrent_id(origin_site)) {
         return 1;
     }
     if (site_url.match(/^http(s*):\/\/iptorrents.com\/torrent.php\?id=*/i)) {
@@ -5646,9 +5797,8 @@ function auto_feed_add_generic_list_search(siteKey, rowSelector, titleSelectors)
 }
 
 
-if (site_url.match(/^https:\/\/greatposterwall\.com\/torrents\.php/i)) {
-    auto_feed_add_generic_list_search('GPW', 'tr.group_torrent, tr.torrent, tr[class*="torrent"], tr', ['a[href*="torrents.php?id"]', 'a[href*="torrentid"]', '.torrent_properties', 'td:eq(1)', 'td:eq(2)']);
-}
+// GPW: do not inject quick-search bars into every torrent row on the torrent list.
+// The torrent detail/forwarding-area quick search is intentionally kept unchanged.
 
 if (site_url.match(/^https:\/\/beyond-hd\.me\/torrents/i)) {
     auto_feed_add_generic_list_search('BHD', 'tr, .torrent, .torrent-card, .torrent-row, li', ['a[href*="/torrents/"]', 'a[href*="/library/title/"]', '.torrent-name', '.title']);
@@ -9594,16 +9744,19 @@ function auto_feed() {
         }
 
         if (origin_site == 'PTP') {
-            if (site_url.match(/torrentid=(\d+)/)) {
-                torrent_id = site_url.match(/torrentid=(\d+)/)[1];
-            }
+            torrent_id = popcorn_gazelle_resolve_torrent_id('PTP');
+            if (!torrent_id) return;
+            var ptp_existing_forward = document.querySelector('.popcorn-gazelle-transfer-wrap[data-torrent-id="' + torrent_id + '"] #forward_r');
+            if (ptp_existing_forward) return;
+            popcorn_reset_gazelle_raw_info();
             try {
                 raw_info.url = document.getElementById("imdb-title-link").href;
             } catch (err) {}
             tbody = document.getElementById("torrent-table");
+            if (!tbody) return;
             var tr_matched = document.getElementById('group_torrent_header_' + torrent_id);
 
-            if (tr_matched.innerHTML.match(/High quality torrent/)){
+            if (tr_matched && tr_matched.innerHTML.match(/High quality torrent/)){
                 raw_info.golden_torrent = true;
             }
             try{
@@ -9645,14 +9798,17 @@ function auto_feed() {
         }
 
         if (origin_site == 'GPW') {
-            if (site_url.match(/torrentid=(\d+)/)) {
-                torrent_id = site_url.match(/torrentid=(\d+)/)[1];
-            }
+            torrent_id = popcorn_gazelle_resolve_torrent_id('GPW');
+            if (!torrent_id) return;
+            var gpw_existing_forward = document.querySelector('.popcorn-gazelle-transfer-wrap[data-torrent-id="' + torrent_id + '"] #forward_r');
+            if (gpw_existing_forward) return;
+            popcorn_reset_gazelle_raw_info();
             try {
                 raw_info.url = match_link('imdb', $('div.LayoutBody').html());
                 console.log(raw_info.url)
             } catch (err) {}
             tbody = document.getElementById("torrent_details");
+            if (!tbody) return;
         }
 
         if (origin_site == 'BTN') {
@@ -11225,8 +11381,14 @@ function auto_feed() {
                 }
             }
 
-            if (['PTP', 'MTV', 'HDF', 'RED' , 'BTN', 'jpop', 'GPW', 'HD-Only', 'REMOVED_SC', 'ANT', 'lztr', 'DICMusic', 'OPS', 'TVV', 'SugoiMusic'].indexOf(origin_site) > -1) {
-                if (origin_site == 'PTP' || origin_site == 'GPW' || origin_site == 'REMOVED_SC' || origin_site == 'ANT') {
+            if (origin_site == 'PTP' || origin_site == 'GPW') {
+                // PTP / GPW controls are mounted later inside the selected torrent's expanded
+                // detail panel. Do not insert rows into the group-wide torrent table.
+                raw_info.type = '电影';
+            }
+
+            if (['MTV', 'HDF', 'RED' , 'BTN', 'jpop', 'HD-Only', 'REMOVED_SC', 'ANT', 'lztr', 'DICMusic', 'OPS', 'TVV', 'SugoiMusic'].indexOf(origin_site) > -1) {
+                if (origin_site == 'REMOVED_SC' || origin_site == 'ANT') {
                     raw_info.type = '电影';
                 } else if (origin_site == 'BTN' || origin_site == 'MTV' || origin_site == 'TVV'){
                     raw_info.type = '剧集';
@@ -12857,8 +13019,30 @@ function auto_feed() {
     /*****************************************************************************************************************
     *                                       part 4 源网页转发跳转及功能部署                                             *
     ******************************************************************************************************************/
+        if (origin_site == 'PTP' || origin_site == 'GPW') {
+            var gazelle_mount = popcorn_mount_gazelle_transfer_row(origin_site, torrent_id);
+            if (!gazelle_mount || gazelle_mount.done) return;
+            insert_row = gazelle_mount.row;
+        }
+
         var forward_l, forward_r;
-        if (['PTP', 'MTV', 'HDF', 'RED', 'BTN', 'jpop', 'GPW', 'HD-Only', 'REMOVED_SC', 'ANT', 'lztr', 'DICMusic', 'OPS', 'TVV', 'SugoiMusic', 'HHClub'].indexOf(origin_site) > -1) {
+        if (origin_site == 'PTP' || origin_site == 'GPW') {
+            // BHD-style layout: a real per-torrent forwarding row, with quick search appended
+            // underneath in the same right-hand cell. The whole block lives inside the expanded
+            // torrent detail panel, so collapsing that torrent hides it naturally.
+            forward_l = insert_row.insertCell(0);
+            forward_r = insert_row.insertCell(1);
+            forward_l.innerHTML = "转发种子";
+            forward_l.valign = "top";
+            forward_l.align = "left";
+            forward_l.style.fontWeight = "bold";
+            forward_l.style.width = "88px";
+            forward_l.style.whiteSpace = "nowrap";
+            forward_l.style.padding = "10px 12px";
+            forward_r.style.padding = "10px 12px";
+            forward_l.style.borderTop = "1px solid rgba(128,128,128,.30)";
+            forward_r.style.borderTop = "1px solid rgba(128,128,128,.30)";
+        } else if (['MTV', 'HDF', 'RED', 'BTN', 'jpop', 'HD-Only', 'REMOVED_SC', 'ANT', 'lztr', 'DICMusic', 'OPS', 'TVV', 'SugoiMusic', 'HHClub'].indexOf(origin_site) > -1) {
             forward_r = insert_row.insertCell(0);
             forward_r.colSpan="5";
             forward_r.style.paddingLeft = '12px'; forward_r.style.paddingTop = '10px';
@@ -30284,6 +30468,61 @@ if (origin_site == 'ZHUQUE' && site_url.match(/^https:\/\/zhuque.in\/torrent\/in
 } else {
     setTimeout(__afSafeAutoFeed, sleep_time);
 
+}
+
+// PTP / GPW group pages expand torrent details dynamically. Re-run only when torrent-related
+// DOM changes/clicks occur; auto_feed itself is idempotent for an already-rendered torrent.
+if ((origin_site == 'PTP' || origin_site == 'GPW') &&
+    String(site_url || '').match(/^https?:\/\/(passthepopcorn.me|greatposterwall.com)\/torrents\.php\?[^#]*\bid=\d+/i)) {
+    var popcorn_gazelle_retry_timer = null;
+    var popcorn_gazelle_schedule_retry = function(delay) {
+        try { clearTimeout(popcorn_gazelle_retry_timer); } catch (err) {}
+        popcorn_gazelle_retry_timer = setTimeout(__afSafeAutoFeed, typeof delay == 'number' ? delay : 180);
+    };
+
+    // A few bounded retries also cover direct torrentid links injected very early at document_start.
+    [250, 800, 1600, 3000].forEach(function(ms) {
+        setTimeout(__afSafeAutoFeed, ms);
+    });
+
+    document.addEventListener('click', function(event) {
+        var target = event && event.target;
+        if (!target || target.nodeType !== 1) return;
+        var related = null;
+        try {
+            related = target.closest('[id^="group_torrent_header_"], [id^="torrent_"], [id^="torrent_detail_"]');
+        } catch (err) {}
+        var link = null;
+        try { link = target.closest('a'); } catch (err) {}
+        var href = link ? String(link.getAttribute('href') || '') : '';
+        if (related || /torrentid=\d+/i.test(href)) popcorn_gazelle_schedule_retry(140);
+    }, true);
+
+    try {
+        var popcorn_gazelle_observer = new MutationObserver(function(mutations) {
+            var touched = mutations.some(function(m) {
+                var el = m.target && m.target.nodeType === 1 ? m.target : (m.target && m.target.parentElement);
+                if (!el) return false;
+                try {
+                    if (popcorn_gazelle_detail_id(origin_site, el)) return true;
+                    if (el.closest && el.closest('[id^="torrent_"], [id^="torrent_detail_"], [id^="group_torrent_header_"]')) return true;
+                    if (m.addedNodes && Array.from(m.addedNodes).some(function(n) {
+                        if (!n || n.nodeType !== 1) return false;
+                        if (popcorn_gazelle_detail_id(origin_site, n)) return true;
+                        return !!(n.querySelector && n.querySelector('[id^="torrent_"], [id^="torrent_detail_"], [id^="group_torrent_header_"]'));
+                    })) return true;
+                } catch (err) {}
+                return false;
+            });
+            if (touched) popcorn_gazelle_schedule_retry(180);
+        });
+        popcorn_gazelle_observer.observe(document.documentElement || document.body, {
+            childList: true,
+            subtree: true,
+            attributes: true,
+            attributeFilter: ['style', 'class', 'hidden', 'aria-expanded']
+        });
+    } catch (err) {}
 }
 
 }).call(window);

@@ -1,8 +1,8 @@
 // Popcorn extension site-specific fixes loaded after the original userscript.
 // Keeps the upstream userscript mostly intact while patching browser-extension compatibility gaps.
 (() => {
-  if (window.__POPCORN_FIXES_V39__) return;
-  window.__POPCORN_FIXES_V39__ = true;
+  if (window.__POPCORN_FIXES_V40__) return;
+  window.__POPCORN_FIXES_V40__ = true;
 
   const $ = window.jQuery || window.$;
   const DOUBAN_PREFIX = 'https://movie.douban.com/subject/';
@@ -630,21 +630,12 @@
 
   function addGpwFallbackDisplay() {
     if (!location.href.match(/^https:\/\/greatposterwall\.com\//i)) return;
-    if (document.querySelector('#forward_r, .popcorn-gpw-forward')) return;
-    const isTorrentPage = /\/torrents\.php/i.test(location.pathname + location.search) || /torrentid=\d+|id=\d+/i.test(location.search);
-    if (!isTorrentPage) return;
-    const imdb = findImdbInScope(document.body);
-    const title = cleanTitleForSearch((document.querySelector('h1, .Header, .PageTitle, .TorrentTitle') || {}).textContent || document.title || imdb);
-    const holder = document.createElement('div');
-    holder.className = 'popcorn-gpw-forward';
-    holder.style.cssText = 'margin:12px 0;padding:10px 12px;border:1px solid rgba(120,120,120,.35);background:rgba(0,0,0,.08);line-height:1.8;font-size:14px;clear:both;';
-    const quick = imdb ? quickSearchList().map(x => substituteQuick(x, imdb, title)).join(' | ') : '';
-    holder.innerHTML = '<b style="margin-right:12px;">转发种子</b>' +
-      (quick ? '<span class="search_urls" style="font-size:14px;">' + quick + '</span>' : '<span style="opacity:.75;">未识别到 IMDb，无法生成快捷搜索</span>');
-    holder.querySelectorAll('a').forEach(a => { a.style.color = '#2f8cff'; a.style.fontWeight = '700'; });
-    const target = document.querySelector('.torrent_table, table.Table, table, .main_column, #content, .Body, main') || document.body;
-    try { target.parentNode.insertBefore(holder, target.nextSibling); }
-    catch (_) { document.body.insertBefore(holder, document.body.firstChild); }
+    // Legacy versions placed a quick-search-only box after the whole GPW torrent table and
+    // labelled it as "转发种子". That was not a real transfer action. The real controls are
+    // now mounted by auto_feed.wrapper.js inside the expanded single-torrent detail panel.
+    document.querySelectorAll('.popcorn-gpw-forward').forEach(el => {
+      try { el.remove(); } catch (_) {}
+    });
   }
 
 

@@ -5645,9 +5645,8 @@ function auto_feed_add_generic_list_search(siteKey, rowSelector, titleSelectors)
 }
 
 
-if (site_url.match(/^https:\/\/greatposterwall\.com\/torrents\.php/i)) {
-    auto_feed_add_generic_list_search('GPW', 'tr.group_torrent, tr.torrent, tr[class*="torrent"], tr', ['a[href*="torrents.php?id"]', 'a[href*="torrentid"]', '.torrent_properties', 'td:eq(1)', 'td:eq(2)']);
-}
+// GPW: do not inject quick-search bars into every torrent row on the torrent list.
+// The torrent detail/forwarding-area quick search is intentionally kept unchanged.
 
 if (site_url.match(/^https:\/\/beyond-hd\.me\/torrents/i)) {
     auto_feed_add_generic_list_search('BHD', 'tr, .torrent, .torrent-card, .torrent-row, li', ['a[href*="/torrents/"]', 'a[href*="/library/title/"]', '.torrent-name', '.title']);
