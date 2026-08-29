@@ -2206,6 +2206,105 @@ function popcorn_gazelle_resolve_torrent_id(site) {
     return m ? m[1] : '';
 }
 
+// PTP expands torrent details through AJAX.  The row can become visible before the
+// MediaInfo/BDInfo and description screenshots have actually been inserted.  Do not build
+// a forwarding payload from that half-loaded state, otherwise the destination upload form
+// receives the title/torrent correctly but MediaInfo + Description stay empty.
+function popcorn_ptp_media_score(text) {
+    text = String(text || '').trim();
+    if (!text) return 0;
+    var score = 0;
+    if (/Unique ID/i.test(text)) score += 3;
+    if (/DISC INFO:|Disc Title|Disc Label/i.test(text)) score += 3;
+    if (/\.MPLS|Playlist:/i.test(text)) score += 3;
+    if (/Complete name/i.test(text)) score += 2;
+    if (/(^|\n)General(?:\s|$)/i.test(text)) score += 2;
+    if (/(^|\n)Video(?:\s|$)/i.test(text)) score += 1;
+    if (/(^|\n)Audio(?:\s|$)/i.test(text)) score += 1;
+    if (/Format\s*:/i.test(text)) score += 1;
+    if (/Duration\s*:/i.test(text)) score += 1;
+    if (/Bit rate\s*:/i.test(text)) score += 1;
+    return score;
+}
+
+function popcorn_ptp_find_media_text(torrent_box) {
+    if (!torrent_box) return '';
+    var candidates = [];
+    var push_text = function(value) {
+        var text = String(value || '').replace(/\r/g, '').trim();
+        if (text.length < 40 || popcorn_ptp_media_score(text) < 2) return;
+        if (candidates.indexOf(text) < 0) candidates.push(text);
+    };
+
+    try {
+        torrent_box.querySelectorAll('blockquote, pre, code, .MediaInfoText, .mediainfo, [id*="mediainfo" i], [class*="mediainfo" i]').forEach(function(el) {
+            push_text(el.textContent);
+        });
+    } catch (err) {
+        try {
+            torrent_box.querySelectorAll('blockquote, pre, code, .MediaInfoText, .mediainfo').forEach(function(el) {
+                push_text(el.textContent);
+            });
+        } catch (err2) {}
+    }
+
+    // On PTP the visible "MediaInfo" link and the actual text are often siblings.  This
+    // fallback survives small markup changes where next().next() is no longer the payload.
+    try {
+        torrent_box.querySelectorAll('a[onclick*="MediaInfoToggleShow"], a[onclick*="mediainfo" i]').forEach(function(link) {
+            var node = link.nextElementSibling;
+            for (var i = 0; node && i < 4; i++, node = node.nextElementSibling) {
+                push_text(node.textContent);
+            }
+            if (link.parentElement) push_text(link.parentElement.textContent);
+        });
+    } catch (err) {}
+
+    if (!candidates.length) return '';
+    candidates.sort(function(a, b) {
+        var score_diff = popcorn_ptp_media_score(b) - popcorn_ptp_media_score(a);
+        return score_diff || (b.length - a.length);
+    });
+    return candidates[0];
+}
+
+function popcorn_ptp_collect_screenshot_urls(torrent_box) {
+    if (!torrent_box) return [];
+    var urls = [];
+    var nodes = [];
+    try {
+        nodes = Array.from(torrent_box.querySelectorAll('.bbcode-table-guard img, .torrent_description img, .description img, img.scale_image'));
+    } catch (err) {}
+    nodes.forEach(function(img) {
+        var src = String((img && (img.currentSrc || img.src || img.getAttribute('src') || img.getAttribute('data-src') || img.getAttribute('data-original'))) || '').trim();
+        if (!src || !/^https?:/i.test(src)) return;
+        if (/\/(?:flags?|avatars?|smilies?|icons?|static)\//i.test(src) || /common\/symbols|sprite|favicon/i.test(src)) return;
+        // Prefer the full-size image when the screenshot is rendered as a thumbnail link.
+        try {
+            var anchor = img.closest && img.closest('a[href]');
+            var href = anchor ? String(anchor.href || anchor.getAttribute('href') || '') : '';
+            if (/^https?:/i.test(href) && (/(?:\.(?:jpe?g|png|webp|avif))(?:[?#].*)?$/i.test(href) || /ptpimg|pixhost|imgbox|imagebam|ibb\.co/i.test(href))) {
+                src = href;
+            }
+        } catch (err) {}
+        var w = parseInt(img.getAttribute('width') || '0', 10) || 0;
+        var h = parseInt(img.getAttribute('height') || '0', 10) || 0;
+        if (w && h && w <= 80 && h <= 80) return;
+        if (urls.indexOf(src) < 0) urls.push(src);
+    });
+    return urls;
+}
+
+function popcorn_ptp_detail_payload_ready(torrent_id) {
+    if (!torrent_id) return false;
+    var box = document.getElementById('torrent_' + torrent_id);
+    if (!box || !popcorn_gazelle_is_visible(box)) return false;
+    // MediaInfo/BDInfo is the last essential part of PTP's AJAX detail payload for forwarding.
+    // Once it exists, screenshot <img> URLs are already present in the same inserted markup even
+    // if the image bytes themselves are still loading.
+    return !!popcorn_ptp_find_media_text(box);
+}
+
 function popcorn_reset_gazelle_raw_info() {
     // auto_feed can run more than once on a Gazelle group page as different torrents are
     // expanded. Clear per-torrent state so data from the previous release cannot leak into
@@ -9746,6 +9845,9 @@ function auto_feed() {
         if (origin_site == 'PTP') {
             torrent_id = popcorn_gazelle_resolve_torrent_id('PTP');
             if (!torrent_id) return;
+            // Inline expansion first exposes #torrent_<id> and only then fills its MediaInfo /
+            // Description payload.  Wait for that payload before freezing the forwarding data.
+            if (!popcorn_ptp_detail_payload_ready(torrent_id)) return;
             var ptp_existing_forward = document.querySelector('.popcorn-gazelle-transfer-wrap[data-torrent-id="' + torrent_id + '"] #forward_r');
             if (ptp_existing_forward) return;
             popcorn_reset_gazelle_raw_info();
@@ -11892,6 +11994,7 @@ function auto_feed() {
 
         if (origin_site == 'PTP') {
             var torrent_box = document.getElementById("torrent_" + torrent_id);
+            if (!torrent_box) return;
             var subtitle_box = $(torrent_box).find('#subtitle_manager');
             subtitle_box.find('img').map((idnex, e)=>{
                 if ($(e).attr('title') != "No Subtitles" && !$(e).parent().is("a")){
@@ -11904,12 +12007,42 @@ function auto_feed() {
 
             raw_info.edition_info = $(`#group_torrent_header_${torrent_id}`).find('a[id="PermaLinkedTorrentToggler"]').text();
 
-            var torrent_div = torrent_box.getElementsByClassName("bbcode-table-guard");
-            raw_info.comparisons = walk_ptp(torrent_div[0].cloneNode(true)).trim();
+            var torrent_divs = Array.from(torrent_box.getElementsByClassName("bbcode-table-guard"));
+            var torrent_div = torrent_divs.length ? torrent_divs[torrent_divs.length-1] : torrent_box;
+
+            // Only mark comparisons when PTP actually contains a comparison block.  The old
+            // code stored the whole first bbcode guard in raw_info.comparisons; GPW then treated
+            // that truthy value as screenshot data and could leave Description empty.
+            raw_info.comparisons = '';
+            if (torrent_divs.length) {
+                try {
+                    var saved_descr_for_comparison = raw_info.descr;
+                    var converted_comparison = walk_ptp(torrent_divs[0].cloneNode(true)).trim();
+                    raw_info.descr = saved_descr_for_comparison;
+                    if (/\[comparison=/i.test(converted_comparison)) raw_info.comparisons = converted_comparison;
+                } catch (err) {}
+            }
+
+            raw_info.multi_mediainfo = '';
             $(torrent_box).find('a[onclick*="BBCode.MediaInfoToggleShow"]').each((index,e)=>{
-                raw_info.multi_mediainfo += `[quote]${$(e).next().next().text()}[/quote]`;
+                var media_text = '';
+                try {
+                    var choices = [
+                        $(e).next().next().text(),
+                        $(e).next().text(),
+                        $(e).siblings('blockquote, pre, code, div').text(),
+                        $(e).parent().text()
+                    ];
+                    for (var c = 0; c < choices.length; c++) {
+                        var candidate = String(choices[c] || '').trim();
+                        if (popcorn_ptp_media_score(candidate) >= 2) {
+                            media_text = candidate;
+                            break;
+                        }
+                    }
+                } catch (err) {}
+                if (media_text) raw_info.multi_mediainfo += `[quote]${media_text}[/quote]`;
             });
-            torrent_div = torrent_div[torrent_div.length-1];
 
             var tmp_tag_as = torrent_div.getElementsByTagName('a');
             var compare_picture = '';
@@ -11946,57 +12079,75 @@ function auto_feed() {
 
             if (!raw_info.name || !raw_info.descr.match(raw_info.name)) {
                 var file_box = document.getElementById('files_' + torrent_id);
-                raw_info.name = file_box.getElementsByTagName('td')[0].textContent.replace(/\[|\]|\(|\)|mkv$|mp4$/g, '').trim();
+                if (file_box && file_box.getElementsByTagName('td').length) {
+                    raw_info.name = file_box.getElementsByTagName('td')[0].textContent.replace(/\[|\]|\(|\)|mkv$|mp4$/g, '').trim();
+                }
             }
+
+            // MediaInfo / BDInfo: prefer the traditional PTP blockquote, but fall back to the
+            // currently rendered media-info containers.  Keep a dedicated full_mediainfo copy
+            // so BHD and GPW can fill their MediaInfo/BDInfo textarea directly.
+            var descr_info = '';
             var descr_box = torrent_box.getElementsByTagName('blockquote');
             for (i=0; i<descr_box.length; i++){
                 var tmp_descr = descr_box[i].textContent;
-                if (tmp_descr.match(/Unique ID|DISC INFO:|.MPLS|General/i)){
-                    descr_info = descr_box[i].textContent;
-                    if (descr_info.match(/Complete.*?name.*?(VOB|IFO)/i)) {
+                if (popcorn_ptp_media_score(tmp_descr) >= 2){
+                    descr_info = tmp_descr;
+                    if (descr_info.match(/Complete.*?name.*?(VOB|IFO)/i) && descr_box[i+1]) {
                         if (descr_info.match(/Complete.*?name.*?VOB/i)){
-                            descr_info += '[/quote]\n\n[quote]' + descr_box[i+1].textContent;
+                            descr_info += '\n\n' + descr_box[i+1].textContent;
                         } else {
-                            descr_info = descr_box[i+1].textContent + '[/quote]\n\n[quote]' + descr_info;
+                            descr_info = descr_box[i+1].textContent + '\n\n' + descr_info;
                         }
                     }
                     break;
                 }
             }
+            if (!descr_info) descr_info = popcorn_ptp_find_media_text(torrent_box);
+            raw_info.full_mediainfo = String(descr_info || '').trim();
+
             if (raw_info.edition_info.match(/DVD\d/)) {
                 raw_info.medium_sel = 'DVD';
                 raw_info.name = $('h2').text().split(/\[.*?\]/)[0] + $('h2').text().match(/\[(\d+)\]/)[1];
                 raw_info.name += ' ' + raw_info.edition_info.match(/NTSC|PAL/)[0];
                 raw_info.name += ' ' + raw_info.edition_info.match(/DVD\d+/)[0];
             }
-            try {
-                raw_info.descr = '[quote]' + descr_info + '[/quote]\n\n';
-            } catch (err) {}
-            var img_urls = '';
-            var imgs = torrent_div.getElementsByTagName('img');
-            for (i=0; i< imgs.length; i++){
-                img_urls += '[img]' + imgs[i].src + '[/img]\n';
-            }
-            raw_info.descr += img_urls;
 
-            var img = Array.from(imgs);
-            img.forEach(e=> {e.classList.add('checkable_IMG'); e.onclick='';});
-            $('.checkable_IMG').imgCheckbox({
-                onclick: function(el){
-                    var isChecked = el.hasClass("imgChked"),
-                    imgEl = el.children()[0]; // the img element
-                    img_src = imgEl.src;
-                    if (isChecked) {
-                        raw_info.images.push(img_src);
-                    } else {
-                        raw_info.images.remove(img_src);
-                    }
-                    console.log(raw_info.images);
-                },
-                "graySelected": false,
-                "checkMarkSize": "20px",
-                "fadeCheckMark": false
+            raw_info.descr = raw_info.full_mediainfo ? '[quote]' + raw_info.full_mediainfo + '[/quote]\n\n' : '';
+
+            // Description on PTP is normally the release screenshots.  Gather them from all
+            // description guards instead of assuming the last guard is always the screenshot
+            // container (PTP has changed that ordering over time).
+            var ptp_screenshot_urls = popcorn_ptp_collect_screenshot_urls(torrent_box);
+            ptp_screenshot_urls.forEach(function(src) {
+                raw_info.descr += '[img]' + src + '[/img]\n';
             });
+
+            // Preserve the existing image-selection helper for the classic PTP markup, but do
+            // not let it affect what gets forwarded automatically.
+            var imgs = torrent_div ? torrent_div.getElementsByTagName('img') : [];
+            var img = Array.from(imgs).filter(function(e) {
+                return ptp_screenshot_urls.indexOf(String(e.currentSrc || e.src || '')) >= 0;
+            });
+            img.forEach(e=> {e.classList.add('checkable_IMG'); e.onclick='';});
+            try {
+                $('.checkable_IMG').imgCheckbox({
+                    onclick: function(el){
+                        var isChecked = el.hasClass("imgChked"),
+                        imgEl = el.children()[0];
+                        img_src = imgEl.src;
+                        if (isChecked) {
+                            raw_info.images.push(img_src);
+                        } else {
+                            raw_info.images.remove(img_src);
+                        }
+                        console.log(raw_info.images);
+                    },
+                    "graySelected": false,
+                    "checkMarkSize": "20px",
+                    "fadeCheckMark": false
+                });
+            } catch (err) {}
 
             if (compare_picture){
                 raw_info.descr += '\n\n[b]对比图[/b]\n' + compare_picture;
@@ -12004,7 +12155,7 @@ function auto_feed() {
 
             raw_info.name = raw_info.name.replace(/\s+-\s+/i, '-');
             //PTP原盘处理
-            if(raw_info.descr.match(/.MPLS/i)) {
+            if(raw_info.descr.match(/\.MPLS/i)) {
                 var tmp_name = document.getElementsByTagName('h2')[0].textContent.split('[')[0].trim();
                 var tmp_year = document.getElementsByTagName('h2')[0].textContent.match(/\[(\d+)\]/)[1];
                 raw_info.name = get_bluray_name_from_descr(raw_info.descr, tmp_name+' '+tmp_year);
@@ -12014,9 +12165,6 @@ function auto_feed() {
                 }
                 raw_info.medium_sel = 'Blu-ray';
                 raw_info.name = raw_info.name.replace(/bluray/i, 'Blu-ray');
-            }
-            else {
-                raw_info.name  =  raw_info.name;
             }
             raw_info.version_info = $(`#group_torrent_header_${torrent_id}`).find('#PermaLinkedTorrentToggler').text();
             raw_info.torrent_url = `https://passthepopcorn.me/` + $(`a[href*="download&id=${torrent_id}"]`).attr('href');
