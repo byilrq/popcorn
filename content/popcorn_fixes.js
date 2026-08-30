@@ -535,7 +535,7 @@
 
 
   function cleanupBhdTitleAndSearch() {
-    if (!location.href.match(/^https:\/\/beyond-hd\.me\/(library\/title|torrents\/)/i)) return;
+    if (!location.href.match(/^https:\/\/beyond-hd\.me\/(?:library\/title(?:[\/?#]|$)|torrents(?:[\/?#]|$))/i)) return;
 
     // Remove quick-search snippets outside the original forwarding area. The upstream
     // script inserts the usable quick search inside #forward_r / 转发种子; later Popcorn
@@ -1906,6 +1906,7 @@
       rewriteDoubanBtnLinks();
       rewriteDoubanSelectedSeriesLinks().catch(e => console.debug('[Popcorn] selected Douban series IMDb normalize skipped', e));
       cleanupExclusiveStatus();
+      cleanupBhdTitleAndSearch();
       fixBhdTitleDouban().catch(e => console.debug('[Popcorn] BHD cleanup skipped', e));
       fixBluTitleDouban().catch(e => console.debug('[Popcorn] BLU Douban enhance skipped', e));
       fixBhdSeriesSearchImdb().catch(e => console.debug('[Popcorn] BHD series IMDb search fix skipped', e));
@@ -1946,6 +1947,7 @@
       clearTimeout(tmTimer);
       tmTimer = setTimeout(() => {
         cleanupAllDoubanControls();
+        cleanupBhdTitleAndSearch();
         addTransmissionButtons();
         if (isBluHost()) fixBluTitleDouban().catch(e => console.debug('[Popcorn] BLU Douban enhance observer skipped', e));
       }, 600);

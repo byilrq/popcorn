@@ -5899,7 +5899,9 @@ function auto_feed_add_generic_list_search(siteKey, rowSelector, titleSelectors)
 // GPW: do not inject quick-search bars into every torrent row on the torrent list.
 // The torrent detail/forwarding-area quick search is intentionally kept unchanged.
 
-if (site_url.match(/^https:\/\/beyond-hd\.me\/torrents/i)) {
+// BHD: do not inject quick-search bars into the torrent list/watchlist/no-result page.
+// Keep quick search only inside the per-torrent forwarding/detail panel.
+if (false && site_url.match(/^https:\/\/beyond-hd\.me\/torrents/i)) {
     auto_feed_add_generic_list_search('BHD', 'tr, .torrent, .torrent-card, .torrent-row, li', ['a[href*="/torrents/"]', 'a[href*="/library/title/"]', '.torrent-name', '.title']);
 }
 

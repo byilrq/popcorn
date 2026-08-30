@@ -101,7 +101,7 @@ function autoFeedHostAllowed(url) {
   async function continueAutoFeedInjection() {
   try {
     const u = new URL(location.href);
-    if (u.hostname === 'beyond-hd.me' && /^\/(library\/title|torrents\/)/i.test(u.pathname)) {
+    if (u.hostname === 'beyond-hd.me' && /^\/(?:library\/title(?:\/|$)|torrents(?:\/|$))/i.test(u.pathname)) {
       document.documentElement.classList.add('popcorn-bhd-suppress-search');
       const st = document.createElement('style');
       st.id = 'popcorn-bhd-prehide-search-urls';
