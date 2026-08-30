@@ -591,32 +591,63 @@ async function transmissionRpcCall(config, body) {
   const headers = { 'Content-Type': 'application/json' };
   const auth = transmissionAuthHeader(config.username, config.password);
   if (auth) headers.Authorization = auth;
-  const doFetch = async () => {
-    try {
-      return await fetch(rpcUrl, {
-        method: 'POST',
-        headers,
-        body: JSON.stringify(body),
-        credentials: 'include',
-        redirect: 'follow'
-      });
-    } catch (e) {
-      throw new Error('无法连接 Transmission RPC：' + (e && e.message ? e.message : String(e)) + '。请检查地址是否可访问、远程访问/白名单是否开启、端口是否正确。');
-    }
+
+  // The timeout covers one complete RPC attempt, including the normal 409
+  // Session-Id handshake. Torrent push timers start only after the .torrent
+  // has already been downloaded, read and converted to Base64.
+  const configuredTimeout = Number(config && config.timeoutMs);
+  const timeoutMs = Number.isFinite(configuredTimeout) && configuredTimeout > 0
+    ? Math.max(1000, configuredTimeout)
+    : 15000;
+  const controller = new AbortController();
+  const externalSignal = config && config.signal;
+  let abortedByExternal = false;
+  const abortFromExternal = () => {
+    abortedByExternal = true;
+    try { controller.abort(); } catch (e) { /* ignore */ }
   };
-  let res = await doFetch();
-  if (res.status === 409) {
-    const sid = res.headers.get('X-Transmission-Session-Id');
-    if (!sid) throw new Error('Transmission 返回 409，但没有 Session ID');
-    headers['X-Transmission-Session-Id'] = sid;
-    res = await doFetch();
+  if (externalSignal && typeof externalSignal.addEventListener === 'function') {
+    if (externalSignal.aborted) abortFromExternal();
+    else externalSignal.addEventListener('abort', abortFromExternal, { once: true });
   }
-  const text = await res.text();
-  if (!res.ok) throw new Error('Transmission RPC HTTP ' + res.status + ': ' + text.slice(0, 200));
-  let json = null;
-  try { json = JSON.parse(text); } catch (e) { throw new Error('Transmission RPC 返回不是 JSON: ' + text.slice(0, 200)); }
-  if (json.result && json.result !== 'success') throw new Error(json.result);
-  return json;
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+
+  const doFetch = async () => fetch(rpcUrl, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify(body),
+    credentials: 'include',
+    redirect: 'follow',
+    signal: controller.signal
+  });
+
+  try {
+    let res = await doFetch();
+    if (res.status === 409) {
+      const sid = res.headers.get('X-Transmission-Session-Id');
+      if (!sid) throw new Error('Transmission 返回 409，但没有 Session ID');
+      headers['X-Transmission-Session-Id'] = sid;
+      res = await doFetch();
+    }
+    const text = await res.text();
+    if (!res.ok) throw new Error('Transmission RPC HTTP ' + res.status + ': ' + text.slice(0, 200));
+    let json = null;
+    try { json = JSON.parse(text); } catch (e) { throw new Error('Transmission RPC 返回不是 JSON: ' + text.slice(0, 200)); }
+    if (json.result && json.result !== 'success') throw new Error(json.result);
+    return json;
+  } catch (e) {
+    if (controller.signal.aborted || (e && e.name === 'AbortError')) {
+      if (abortedByExternal) throw new Error('Transmission RPC 已取消');
+      throw new Error('Transmission RPC 请求超时（' + Math.round(timeoutMs / 1000) + '秒）');
+    }
+    if (e && /^Transmission /.test(String(e.message || ''))) throw e;
+    throw new Error('无法连接 Transmission RPC：' + (e && e.message ? e.message : String(e)) + '。请检查地址是否可访问、远程访问/白名单是否开启、端口是否正确。');
+  } finally {
+    clearTimeout(timer);
+    if (externalSignal && typeof externalSignal.removeEventListener === 'function') {
+      try { externalSignal.removeEventListener('abort', abortFromExternal); } catch (e) { /* ignore */ }
+    }
+  }
 }
 
 async function testTransmissionRpc(payload) {
@@ -654,6 +685,8 @@ async function addTorrentToTransmission(payload) {
     '__popcorn_tm_tv_dir'
   ]);
 
+  // 先完整获取一次种子：下载 .torrent -> 读取 -> Base64。
+  // 只有 metainfo 准备好以后，LAN/WAN 的 RPC 超时计时才开始。
   const metainfo = await fetchTorrentAsBase64(payload && payload.torrentUrl);
   const args = { metainfo };
   const target = payload && payload.target === 'tv' ? 'tv' : 'movie';
@@ -663,40 +696,68 @@ async function addTorrentToTransmission(payload) {
   const dir = target === 'tv' ? tvDir : movieDir;
   if (dir) args['download-dir'] = dir;
 
-  // 根据 payload.address 参数决定使用哪个地址，或尝试两个都用
-  const addresses = [];
+  const configured = [];
   if (payload && payload.address === 'wan') {
-    addresses.push({ type: 'wan', url: store.__popcorn_tm_rpc_wan });
+    configured.push({ type: 'wan', url: store.__popcorn_tm_rpc_wan, timeoutMs: 15000 });
   } else if (payload && payload.address === 'lan') {
-    addresses.push({ type: 'lan', url: store.__popcorn_tm_rpc_lan });
+    configured.push({ type: 'lan', url: store.__popcorn_tm_rpc_lan, timeoutMs: 15000 });
   } else {
-    // 默认先外网后局域网
-    addresses.push({ type: 'wan', url: store.__popcorn_tm_rpc_wan });
-    addresses.push({ type: 'lan', url: store.__popcorn_tm_rpc_lan });
+    // 默认同时向 LAN / WAN 发起 torrent-add：
+    // LAN / WAN 都最多等待 15 秒；任意一个成功就立即算成功，
+    // 并取消仍在等待的另一个请求。只有两边都失败才返回失败。
+    configured.push({ type: 'lan', url: store.__popcorn_tm_rpc_lan, timeoutMs: 15000 });
+    configured.push({ type: 'wan', url: store.__popcorn_tm_rpc_wan, timeoutMs: 15000 });
   }
 
-  let lastError = null;
-  for (const addr of addresses) {
-    try {
-      if (!addr.url || String(addr.url).trim() === '') continue;
-      const json = await transmissionRpcCall({
-        rpcUrl: addr.url,
-        username: store.__popcorn_tm_username,
-        password: store.__popcorn_tm_password
-      }, { method:'torrent-add', arguments: args });
-      const a = json.arguments || {};
-      if (a['torrent-duplicate']) return { status:'duplicate', name:a['torrent-duplicate'].name || '', address:addr.type };
-      if (a['torrent-added']) return { status:'added', name:a['torrent-added'].name || '', address:addr.type };
-      return { status:'success', address:addr.type };
-    } catch (e) {
-      lastError = e;
-      // 继续尝试下一个地址
-      continue;
+  const addresses = configured.filter((addr) => addr.url && String(addr.url).trim() !== '');
+  if (!addresses.length) throw new Error('没有可用的 Transmission RPC 地址');
+
+  const controllers = new Map();
+  const errors = [];
+  let settled = false;
+
+  const runOne = async (addr) => {
+    const cancelController = new AbortController();
+    controllers.set(addr.type, cancelController);
+    const json = await transmissionRpcCall({
+      rpcUrl: addr.url,
+      username: store.__popcorn_tm_username,
+      password: store.__popcorn_tm_password,
+      timeoutMs: addr.timeoutMs,
+      signal: cancelController.signal
+    }, { method:'torrent-add', arguments: args });
+    const a = json.arguments || {};
+    if (a['torrent-duplicate']) return { status:'duplicate', name:a['torrent-duplicate'].name || '', address:addr.type };
+    if (a['torrent-added']) return { status:'added', name:a['torrent-added'].name || '', address:addr.type };
+    return { status:'success', address:addr.type };
+  };
+
+  return await new Promise((resolve, reject) => {
+    let pending = addresses.length;
+    for (const addr of addresses) {
+      runOne(addr).then((result) => {
+        if (settled) return;
+        settled = true;
+        // 先返回的成功地址已经完成 torrent-add；另一条只是同一 NAS 的备用路径，
+        // 立即取消，避免继续占用连接或重复提交。
+        for (const [type, ctl] of controllers.entries()) {
+          if (type !== addr.type) {
+            try { ctl.abort(); } catch (e) { /* ignore */ }
+          }
+        }
+        resolve(result);
+      }).catch((err) => {
+        if (settled) return;
+        errors.push({ address: addr.type, error: err });
+        pending -= 1;
+        if (pending <= 0) {
+          settled = true;
+          const detail = errors.map((item) => item.address + ': ' + (item.error && item.error.message ? item.error.message : String(item.error))).join('；');
+          reject(new Error('局域网和外网都推送失败' + (detail ? '：' + detail : '')));
+        }
+      });
     }
-  }
-
-  // 所有地址都失败
-  throw lastError || new Error('没有可用的 Transmission RPC 地址');
+  });
 }
 
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
