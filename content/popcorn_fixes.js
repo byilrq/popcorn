@@ -7,6 +7,10 @@
   const $ = window.jQuery || window.$;
   const DOUBAN_PREFIX = 'https://movie.douban.com/subject/';
 
+  // Keep successful TM/TV state for the lifetime of the current page.
+  // A normal page refresh recreates this Set, which intentionally clears the status.
+  const transmissionPushSuccess = new Set();
+
   try {
     const st = document.createElement('style');
     st.textContent = [
@@ -1553,58 +1557,77 @@
     // 图标式 NexusPHP 站点用 href + 图标识别，避免破坏原来的四宫格布局。
     return (/^\[?\s*DL\s*\]?$/i.test(text) && !!href && !/^javascript:/i.test(href)) || isUnit3dTorrentDownloadAnchor(a) || isIconStyleTorrentAnchor(a);
   }
+  function resolveTransmissionTorrentUrl(dlAnchor) {
+    const href = (dlAnchor && dlAnchor.dataset && dlAnchor.dataset.popcornTorrentUrl)
+      || (dlAnchor && dlAnchor.getAttribute && dlAnchor.getAttribute('href'))
+      || (dlAnchor && dlAnchor.getAttribute && dlAnchor.getAttribute('formaction'))
+      || (dlAnchor && dlAnchor.href)
+      || getBluControlUrl(dlAnchor)
+      || '';
+    try { return new URL(href, location.href).href; } catch (_) { return ''; }
+  }
+  function transmissionPushKey(dlAnchor, target) {
+    const torrentUrl = resolveTransmissionTorrentUrl(dlAnchor);
+    return torrentUrl ? (target === 'tv' ? 'tv|' : 'movie|') + torrentUrl : '';
+  }
+  function markTransmissionButtonPushed(btn, title) {
+    if (!btn) return;
+    // Use a Popcorn-specific success class.  Generic `is-ok` collides with
+    // several tracker themes and can turn this tiny text link into a filled
+    // green badge.  Successful TM/TV should stay plain green text only.
+    btn.classList.remove('is-working', 'is-bad', 'is-ok');
+    btn.classList.add('is-pushed');
+    btn.dataset.popcornTmPushed = '1';
+    btn.textContent = '已推送';
+    btn.style.setProperty('color', '#19dc72', 'important');
+    btn.style.setProperty('background', 'transparent', 'important');
+    btn.style.setProperty('background-color', 'transparent', 'important');
+    btn.style.setProperty('background-image', 'none', 'important');
+    btn.style.setProperty('border', 'none', 'important');
+    btn.style.setProperty('box-shadow', 'none', 'important');
+    btn.style.setProperty('text-shadow', 'none', 'important');
+    btn.style.setProperty('filter', 'none', 'important');
+    btn.style.setProperty('opacity', '1', 'important');
+    if (title) btn.title = title;
+  }
   async function pushTorrentToTransmission(btn, dlAnchor, target) {
-    const old = btn.textContent;
-    const label = target === 'tv' ? 'TV' : 'TM';
+    const old = target === 'tv' ? 'TV' : 'TM';
+    const label = old;
+    const key = transmissionPushKey(dlAnchor, target);
+    if (btn.dataset.popcornTmPushed === '1' || (key && transmissionPushSuccess.has(key))) {
+      markTransmissionButtonPushed(btn, btn.title || '已推送到 Transmission');
+      return;
+    }
+    if (btn.classList.contains('is-working')) return;
     try {
-      const href = (dlAnchor && dlAnchor.dataset && dlAnchor.dataset.popcornTorrentUrl)
-        || (dlAnchor && dlAnchor.getAttribute && dlAnchor.getAttribute('href'))
-        || (dlAnchor && dlAnchor.getAttribute && dlAnchor.getAttribute('formaction'))
-        || (dlAnchor && dlAnchor.href)
-        || getBluControlUrl(dlAnchor)
-        || '';
-      const torrentUrl = new URL(href, location.href).href;
+      const torrentUrl = resolveTransmissionTorrentUrl(dlAnchor);
+      if (!torrentUrl) throw new Error('torrent 下载链接无效');
       btn.textContent = label + '...';
+      btn.classList.remove('is-bad');
       btn.classList.add('is-working');
 
-      // 先尝试外网(WAN)，失败后尝试局域网(LAN)
-      let result = null;
-      let lastError = null;
-      const addresses = ['wan', 'lan']; // 默认先外网后局域网
+      // 只把种子交给后台一次。后台先完成：下载 .torrent -> 读取 -> Base64，
+      // 种子准备完成后，LAN 和 WAN 同时发起 torrent-add，两个方向各最多 15 秒。
+      // 任一地址成功即立即算成功；只有两边都失败才显示失败。
+      const result = await popcornExtRequest('transmission_add', {
+        torrentUrl,
+        target: target === 'tv' ? 'tv' : 'movie'
+      });
 
-      for (const address of addresses) {
-        try {
-          result = await popcornExtRequest('transmission_add', {
-            torrentUrl,
-            target: target === 'tv' ? 'tv' : 'movie',
-            address: address // 指定使用 WAN 或 LAN 地址
-          });
-          // 推送成功，停止尝试另一个地址
-          break;
-        } catch (e) {
-          lastError = e;
-          // 本地址失败，继续尝试下一个
-          continue;
-        }
-      }
-
-      // 如果所有地址都失败，抛出最后一个错误
-      if (!result && lastError) {
-        throw lastError;
-      }
-
-      btn.classList.remove('is-working');
-      btn.classList.add('is-ok');
+      if (key) transmissionPushSuccess.add(key);
       const addressLabel = result && result.address === 'wan' ? ' (外网)' : result && result.address === 'lan' ? ' (局域网)' : '';
-      btn.textContent = result && result.status === 'duplicate' ? '已存在' : '已推送';
-      btn.title = (result && result.name ? result.name : '已推送到 Transmission') + addressLabel;
-      setTimeout(() => { btn.textContent = old; btn.classList.remove('is-ok'); }, 5000);
+      const resultLabel = result && result.status === 'duplicate' ? 'Transmission 中已存在' : '已推送到 Transmission';
+      markTransmissionButtonPushed(btn, (result && result.name ? result.name : resultLabel) + addressLabel);
     } catch (e) {
       btn.classList.remove('is-working');
       btn.classList.add('is-bad');
       btn.textContent = '失败';
-      btn.title = '外网和局域网都推送失败';
-      setTimeout(() => { btn.textContent = old; btn.classList.remove('is-bad'); }, 8000);
+      btn.title = '局域网和外网都推送失败';
+      setTimeout(() => {
+        if (btn.dataset.popcornTmPushed === '1') return;
+        btn.textContent = old;
+        btn.classList.remove('is-bad');
+      }, 8000);
     }
   }
   function createTmPushButton(text, title, target, dlAnchor) {
@@ -1613,6 +1636,10 @@
     btn.className = 'popcorn-tm-btn popcorn-tm-btn-' + (target === 'tv' ? 'tv' : 'movie');
     btn.textContent = text;
     btn.title = title;
+    const key = transmissionPushKey(dlAnchor, target);
+    if (key && transmissionPushSuccess.has(key)) {
+      markTransmissionButtonPushed(btn, '已推送到 Transmission');
+    }
     btn.addEventListener('click', (event) => {
       event.preventDefault();
       event.stopPropagation();
@@ -1845,7 +1872,7 @@
       if (typeof GM_addStyle === 'function' && !document.getElementById('popcorn-tm-style')) {
         const st = GM_addStyle(`
 .popcorn-tm-btn{font:inherit!important;font-size:inherit!important;font-weight:inherit!important;line-height:inherit!important;color:inherit!important;text-decoration:none!important;cursor:pointer!important}
-.popcorn-tm-btn.is-working{opacity:.7}.popcorn-tm-btn.is-ok{color:#0a8f3c!important}.popcorn-tm-btn.is-bad{color:#c1121f!important}
+.popcorn-tm-btn.is-working{opacity:.7}.popcorn-tm-btn.is-pushed{color:#19dc72!important;background:transparent!important;background-color:transparent!important;background-image:none!important;border:none!important;box-shadow:none!important;text-shadow:none!important;filter:none!important;font-weight:inherit!important;opacity:1!important}.popcorn-tm-btn.is-bad{color:#c1121f!important}
 .popcorn-tm-icon-stack{position:absolute!important;left:-28px!important;top:50%!important;transform:translateY(-50%)!important;display:flex!important;flex-direction:column!important;align-items:center!important;justify-content:center!important;gap:4px!important;width:24px!important;min-width:24px!important;height:42px!important;margin:0!important;padding:0!important;line-height:1!important;white-space:nowrap!important;z-index:3!important;pointer-events:auto!important}
 .popcorn-tm-icon-stack .popcorn-tm-btn{display:block!important;width:24px!important;text-align:center!important;font-size:11.5px!important;font-weight:600!important;line-height:14px!important;opacity:.94!important;margin:0!important;padding:0!important}
 .popcorn-tm-icon-stack-chd{left:8px!important;gap:0!important;width:19px!important;min-width:19px!important;height:31px!important}
