@@ -110,14 +110,21 @@ const POPCORN_DEFAULT_TM_CONFIG = {
   __popcorn_tm_download_dir: '/mv'
 };
 
-async function migratePopcornDefaults() {
+async function migratePopcornDefaults(installReason = '') {
   const keys = ['__popcorn_tm_enabled','__popcorn_tm_rpc_lan','__popcorn_tm_rpc_wan','__popcorn_tm_movie_dir','__popcorn_tm_tv_dir','__popcorn_tm_download_dir','__popcorn_tm_sites','__popcorn_series_search_sites','__popcorn_dark_background_sites'];
   const data = await chrome.storage.local.get(keys);
   const updates = {};
+  const rpcKeys = new Set(['__popcorn_tm_rpc_lan', '__popcorn_tm_rpc_wan']);
   for (const [k,v] of Object.entries(POPCORN_DEFAULT_TM_CONFIG)) {
+    if (rpcKeys.has(k)) {
+      // RPC addresses are user-owned settings. Only seed a default for a truly new
+      // installation (or an old profile where the key never existed). Never
+      // rewrite a saved address during extension/browser updates.
+      if (data[k] === undefined || data[k] === null || (installReason === 'install' && data[k] === '')) updates[k] = v;
+      continue;
+    }
     if (data[k] === undefined || data[k] === null || data[k] === '') updates[k] = v;
   }
-  if (String(data.__popcorn_tm_rpc_wan || '').includes('byilrq.iok.la')) updates.__popcorn_tm_rpc_wan = POPCORN_DEFAULT_TM_CONFIG.__popcorn_tm_rpc_wan;
   const tmSites = parseCsvLike(data.__popcorn_tm_sites).join(',');
   if (!tmSites || tmSites === 'PTP,BTN' || tmSites.includes('豆瓣')) updates.__popcorn_tm_sites = JSON.stringify(POPCORN_DEFAULT_TM_SITES);
   const seriesSites = parseCsvLike(data.__popcorn_series_search_sites).join(',');
@@ -254,7 +261,7 @@ chrome.runtime.onInstalled.addListener(async (details) => {
   await cleanupStoredSiteLibrary();
   await migrateShowSearchStorage();
   await migrateQuickSearchStorage();
-  await migratePopcornDefaults();
+  await migratePopcornDefaults(details && details.reason);
   await maybeOpenOptions(details);
 });
 
