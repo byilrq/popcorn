@@ -12,9 +12,20 @@ function decodeTampermonkeyValue(value) {
 }
 
 function normalizeBackup(data) {
-  const src = data && typeof data === 'object' && data.data && typeof data.data === 'object' ? data.data : data;
+  const hasLegacyData = data && typeof data === 'object' && data.data && typeof data.data === 'object';
+  const src = hasLegacyData ? data.data : data;
   const out = {};
   for (const [k, v] of Object.entries(src || {})) out[k] = decodeTampermonkeyValue(v);
+
+  // Transmission defaults are intentionally editable only at the top level of
+  // data/auto_feed.storage.json. Import every __popcorn_tm_* field from there
+  // so there is no second copy of the concrete values in program code or in
+  // the legacy encoded data block.
+  if (hasLegacyData) {
+    for (const [k, v] of Object.entries(data)) {
+      if (k.startsWith('__popcorn_tm_')) out[k] = v;
+    }
+  }
 
   // Do not derive host_link from setting_host. The legacy backup often says MTeam,
   // which makes PtGen links jump to MTeam even when the user is browsing PTP.
@@ -99,34 +110,28 @@ async function cleanupStoredSiteLibrary() {
 }
 const AUTO_FEED_OLD_QUICK_SEARCH_KEYS = ["PTP", "BHD", "GPW"];
 
-const POPCORN_DEFAULT_TM_SITES = 'PTP,BHD,BLU,CHD,ADE,GPW,BTN';
 const POPCORN_DEFAULT_SERIES_SITES = 'BHD,BTN,ADE';
-const POPCORN_DEFAULT_TM_CONFIG = {
-  __popcorn_tm_enabled: 1,
-  __popcorn_tm_rpc_lan: 'http://192.168.31.6:9091',
-  __popcorn_tm_rpc_wan: 'http://域名:9091',
-  __popcorn_tm_movie_dir: '/mv',
-  __popcorn_tm_tv_dir: '/tv',
-  __popcorn_tm_download_dir: '/mv'
-};
 
-async function migratePopcornDefaults(installReason = '') {
-  const keys = ['__popcorn_tm_enabled','__popcorn_tm_rpc_lan','__popcorn_tm_rpc_wan','__popcorn_tm_movie_dir','__popcorn_tm_tv_dir','__popcorn_tm_download_dir','__popcorn_tm_sites','__popcorn_series_search_sites','__popcorn_dark_background_sites'];
+// Transmission runtime settings have a single source of truth: chrome.storage.local.
+// Do not seed or overwrite concrete Transmission values from program code.
+// This migration only folds the old movie-path alias into the current key, then
+// removes the duplicate legacy key. No address, credential, path or site default
+// is defined here.
+async function migrateTransmissionStorageShape() {
+  const data = await chrome.storage.local.get(['__popcorn_tm_movie_dir', '__popcorn_tm_download_dir']);
+  const updates = {};
+  if ((data.__popcorn_tm_movie_dir === undefined || data.__popcorn_tm_movie_dir === null || data.__popcorn_tm_movie_dir === '')
+      && data.__popcorn_tm_download_dir !== undefined && data.__popcorn_tm_download_dir !== null && data.__popcorn_tm_download_dir !== '') {
+    updates.__popcorn_tm_movie_dir = data.__popcorn_tm_download_dir;
+  }
+  if (Object.keys(updates).length) await chrome.storage.local.set(updates);
+  if (data.__popcorn_tm_download_dir !== undefined) await chrome.storage.local.remove('__popcorn_tm_download_dir');
+}
+
+async function migratePopcornDefaults() {
+  const keys = ['__popcorn_series_search_sites','__popcorn_dark_background_sites'];
   const data = await chrome.storage.local.get(keys);
   const updates = {};
-  const rpcKeys = new Set(['__popcorn_tm_rpc_lan', '__popcorn_tm_rpc_wan']);
-  for (const [k,v] of Object.entries(POPCORN_DEFAULT_TM_CONFIG)) {
-    if (rpcKeys.has(k)) {
-      // RPC addresses are user-owned settings. Only seed a default for a truly new
-      // installation (or an old profile where the key never existed). Never
-      // rewrite a saved address during extension/browser updates.
-      if (data[k] === undefined || data[k] === null || (installReason === 'install' && data[k] === '')) updates[k] = v;
-      continue;
-    }
-    if (data[k] === undefined || data[k] === null || data[k] === '') updates[k] = v;
-  }
-  const tmSites = parseCsvLike(data.__popcorn_tm_sites).join(',');
-  if (!tmSites || tmSites === 'PTP,BTN' || tmSites.includes('豆瓣')) updates.__popcorn_tm_sites = JSON.stringify(POPCORN_DEFAULT_TM_SITES);
   const seriesSites = parseCsvLike(data.__popcorn_series_search_sites).join(',');
   if (!seriesSites || seriesSites === 'BHD,BTN') updates.__popcorn_series_search_sites = JSON.stringify(POPCORN_DEFAULT_SERIES_SITES);
   if (!parseCsvLike(data.__popcorn_dark_background_sites).length) updates.__popcorn_dark_background_sites = JSON.stringify('BHD');
@@ -261,7 +266,8 @@ chrome.runtime.onInstalled.addListener(async (details) => {
   await cleanupStoredSiteLibrary();
   await migrateShowSearchStorage();
   await migrateQuickSearchStorage();
-  await migratePopcornDefaults(details && details.reason);
+  await migrateTransmissionStorageShape();
+  await migratePopcornDefaults();
   await maybeOpenOptions(details);
 });
 
@@ -430,6 +436,7 @@ async function runKeepalive(force = false) {
 
 chrome.runtime.onStartup.addListener(async () => {
   await importInitialStorage(false);
+  await migrateTransmissionStorageShape();
   await cleanupStoredSiteLibrary();
   await migrateShowSearchStorage();
   await migrateQuickSearchStorage();
@@ -687,7 +694,6 @@ async function addTorrentToTransmission(payload) {
     '__popcorn_tm_rpc_wan',
     '__popcorn_tm_username',
     '__popcorn_tm_password',
-    '__popcorn_tm_download_dir',
     '__popcorn_tm_movie_dir',
     '__popcorn_tm_tv_dir'
   ]);
@@ -697,8 +703,7 @@ async function addTorrentToTransmission(payload) {
   const metainfo = await fetchTorrentAsBase64(payload && payload.torrentUrl);
   const args = { metainfo };
   const target = payload && payload.target === 'tv' ? 'tv' : 'movie';
-  const legacyDir = String(store.__popcorn_tm_download_dir || '').trim();
-  const movieDir = String(store.__popcorn_tm_movie_dir || legacyDir || '').trim();
+  const movieDir = String(store.__popcorn_tm_movie_dir || '').trim();
   const tvDir = String(store.__popcorn_tm_tv_dir || '').trim();
   const dir = target === 'tv' ? tvDir : movieDir;
   if (dir) args['download-dir'] = dir;
@@ -773,6 +778,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
 
     if (msg.type === 'inject_auto_feed') {
       await importInitialStorage(false);
+      await migrateTransmissionStorageShape();
       await migrateShowSearchStorage();
       await migrateQuickSearchStorage();
       await injectAutoFeed(sender, msg.payload && msg.payload.href);
@@ -845,6 +851,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     if (msg.type === 'reset_storage') {
       await chrome.storage.local.clear();
       await importInitialStorage(true);
+      await migrateTransmissionStorageShape();
       await migrateShowSearchStorage();
       await migrateQuickSearchStorage();
       return { ok:true, data:true };

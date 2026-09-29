@@ -21,13 +21,6 @@
     "used_tmdb_key": "s",
     "__popcorn_dark_background_sites": "sBHD",
     "__popcorn_custom_quick_search_library": "s[]",
-    "__popcorn_tm_enabled": "n1",
-    "__popcorn_tm_rpc_lan": "s",
-    "__popcorn_tm_rpc_wan": "s",
-    "__popcorn_tm_movie_dir": "s/mv",
-    "__popcorn_tm_tv_dir": "s/tv",
-    "__popcorn_tm_download_dir": "s/mv",
-    "__popcorn_tm_sites": "sPTP,BHD,BLU,CHD,ADE,GPW,BTN",
     "__popcorn_series_search_sites": "sBHD,BLU,BTN,ADE"
   },
   "show_search_urls": {
@@ -42,13 +35,14 @@
   },
   "used_search_list": "<a href=\"https://passthepopcorn.me/torrents.php?searchstr={imdbid}\" target=\"_blank\">PTP</a>,<a href=\"https://beyond-hd.me/torrents?search={imdbid}\" target=\"_blank\">BHD</a>,<a href=\"https://blutopia.cc/torrents?imdbid={imdbno}&perPage=25&imdbId={imdbno}\" target=\"_blank\">BLU</a>,<a href=\"https://ptchdbits.co/torrents.php?incldead=0&spstate=0&inclbookmarked=0&search={imdbid}&search_area=4&search_mode=0\" target=\"_blank\">CHD</a>,<a href=\"https://audiences.me/torrents.php?cat401=1&cat402=1&cat403=1&incldead=0&spstate=0&inclbookmarked=0&search={imdbid}&search_area=4\" target=\"_blank\">ADE</a>,<a href=\"https://greatposterwall.com/torrents.php?searchstr={imdbid}\" target=\"_blank\">GPW</a>,<a href=\"https://broadcasthe.net/torrents.php?action=advanced&searchstr=&searchtags=&tags_type=1&groupdesc=&imdbid={imdbid}\" target=\"_blank\">BTN</a>,<a href=\"https://search.douban.com/movie/subject_search?search_text={imdbid}&cat=1002\" target=\"_blank\">豆瓣</a>",
   "used_common_sites": "PTP,BHD,BLU,CHD,ADE,GPW,BTN,豆瓣",
+  "__popcorn_series_search_sites": "BHD,BLU,BTN,ADE",
+  "__popcorn_dark_background_sites": "BHD",
   "__popcorn_tm_enabled": 1,
-  "__popcorn_tm_rpc_lan": "",
-  "__popcorn_tm_rpc_wan": "",
+  "__popcorn_tm_rpc_lan": "http://192.168.31.6:9091",
+  "__popcorn_tm_rpc_wan": "http://域名:9091",
+  "__popcorn_tm_username": "",
+  "__popcorn_tm_password": "",
   "__popcorn_tm_movie_dir": "/mv",
   "__popcorn_tm_tv_dir": "/tv",
-  "__popcorn_tm_download_dir": "/mv",
-  "__popcorn_tm_sites": "PTP,BHD,BLU,CHD,ADE,GPW,BTN",
-  "__popcorn_series_search_sites": "BHD,BLU,BTN,ADE",
-  "__popcorn_dark_background_sites": "BHD"
+  "__popcorn_tm_sites": "PTP,BHD,BLU,CHD,ADE,GPW,BTN"
 }

@@ -9,7 +9,6 @@ const QUICK_DEFAULT_KEYS = ['PTP','BHD','CHD','ADE','GPW','BTN','豆瓣'];
 const QUICK_SITE_KEY_MAP = { PTP:'PTP', BHD:'BHD', CHD:'CHD', ADE:'ADE', GPW:'GPW', BTN:'BTN', '豆瓣':'豆瓣', Douban:'豆瓣' };
 const DEFAULT_SERIES_SEARCH_SITES = ['BHD','BTN','ADE'];
 const DEFAULT_DARK_BACKGROUND_SITES = ['BHD'];
-const DEFAULT_TRANSMISSION_SITES = ['PTP','BHD','CHD','ADE','GPW','BTN'];
 const FORWARD_SITE_ALLOWLIST = ['Audiences','BHD','BTN','CHDBits','GPW','MTeam','OPS','OurBits','PTP','RED','TTG'];
 function isForwardSettingSite(k){ return FORWARD_SITE_ALLOWLIST.includes(k); }
 function seriesKeyFromHtml(html){
@@ -30,8 +29,7 @@ function normalizeDarkBackgroundSites(list, searchList){
 }
 function normalizeTransmissionSites(list, searchList){
   const available = Array.from(new Set((searchList || []).map(seriesKeyFromHtml).filter(Boolean)));
-  let picked = Array.isArray(list) ? list.map(x => String(x || '').trim()).filter(Boolean) : [];
-  if (!picked.length) picked = DEFAULT_TRANSMISSION_SITES.slice();
+  const picked = Array.isArray(list) ? list.map(x => String(x || '').trim()).filter(Boolean) : [];
   return Array.from(new Set(picked)).filter(k => available.includes(k));
 }
 function normalizeRpcUrl(url){
@@ -200,16 +198,16 @@ function defaultsState(data){
   const parsedDarkSites = rawDarkSites === undefined ? DEFAULT_DARK_BACKGROUND_SITES : parseCsvJson(rawDarkSites, []);
   const darkSites = normalizeDarkBackgroundSites(parsedDarkSites, searchList);
   const rawTmSites = data.__popcorn_tm_sites;
-  const parsedTmSites = rawTmSites === undefined ? DEFAULT_TRANSMISSION_SITES : parseCsvJson(rawTmSites, []);
+  const parsedTmSites = parseCsvJson(rawTmSites, []);
   const tmSites = normalizeTransmissionSites(parsedTmSites, searchList);
   const tmConfig = {
-    enabled: data.__popcorn_tm_enabled === undefined ? true : !!num(data.__popcorn_tm_enabled, 1),
-    rpcLan: data.__popcorn_tm_rpc_lan || 'http://192.168.31.6:9091',
-    rpcWan: data.__popcorn_tm_rpc_wan || 'http://域名:9091',
+    enabled: Number(data.__popcorn_tm_enabled) === 1,
+    rpcLan: data.__popcorn_tm_rpc_lan || '',
+    rpcWan: data.__popcorn_tm_rpc_wan || '',
     username: data.__popcorn_tm_username || '',
     password: data.__popcorn_tm_password || '',
-    movieDir: data.__popcorn_tm_movie_dir || data.__popcorn_tm_download_dir || '/mv',
-    tvDir: data.__popcorn_tm_tv_dir || '/tv'
+    movieDir: data.__popcorn_tm_movie_dir || '',
+    tvDir: data.__popcorn_tm_tv_dir || ''
   };
   return { usedSiteInfo, siteOrder, common, showSearch, extra, rehost, searchList, hidden, signinSites, seriesSites, darkSites, tmSites, tmConfig };
 }
@@ -379,14 +377,13 @@ function collect(){
   data.__popcorn_series_search_sites = stringifyCsv(seriesSites);
   data.__popcorn_dark_background_sites = stringifyCsv(darkSites);
   data.__popcorn_tm_sites = stringifyCsv(tmSites);
-  data.__popcorn_tm_enabled = 1;
+  data.__popcorn_tm_enabled = Number(current.__popcorn_tm_enabled) === 1 ? 1 : 0;
   data.__popcorn_tm_rpc_lan = $('tm_rpc_lan') ? $('tm_rpc_lan').value.trim() : '';
   data.__popcorn_tm_rpc_wan = $('tm_rpc_wan') ? $('tm_rpc_wan').value.trim() : '';
   data.__popcorn_tm_username = $('tm_username') ? $('tm_username').value.trim() : '';
   data.__popcorn_tm_password = $('tm_password') ? $('tm_password').value : '';
   data.__popcorn_tm_movie_dir = $('tm_movie_dir') ? $('tm_movie_dir').value.trim() : '';
   data.__popcorn_tm_tv_dir = $('tm_tv_dir') ? $('tm_tv_dir').value.trim() : '';
-  data.__popcorn_tm_download_dir = data.__popcorn_tm_movie_dir;
   return data;
 }
 async function saveAll(){
@@ -504,20 +501,26 @@ if ($('add_manual_quick_search')) $('add_manual_quick_search').onclick = async (
 
 async function saveTransmissionConfigOnly(){
   const data = collect();
-  await chrome.storage.local.set({
-    __popcorn_tm_enabled: 1,
+  const tmWrite = {
+    __popcorn_tm_enabled: data.__popcorn_tm_enabled,
     __popcorn_tm_rpc_lan: data.__popcorn_tm_rpc_lan,
     __popcorn_tm_rpc_wan: data.__popcorn_tm_rpc_wan,
     __popcorn_tm_username: data.__popcorn_tm_username,
     __popcorn_tm_password: data.__popcorn_tm_password,
-    __popcorn_tm_download_dir: data.__popcorn_tm_download_dir,
     __popcorn_tm_movie_dir: data.__popcorn_tm_movie_dir,
     __popcorn_tm_tv_dir: data.__popcorn_tm_tv_dir,
     __popcorn_tm_sites: data.__popcorn_tm_sites
-  });
-  current = { ...current, ...data };
+  };
+  await chrome.storage.local.set(tmWrite);
+  const saved = await chrome.storage.local.get(Object.keys(tmWrite));
+  const mismatch = Object.keys(tmWrite).find(key => JSON.stringify(saved[key]) !== JSON.stringify(tmWrite[key]));
+  if (mismatch) {
+    setStatus('tm_status', 'Transmission 配置保存校验失败：' + mismatch, true);
+    return;
+  }
+  current = { ...current, ...tmWrite };
   setTransmissionEditing(false);
-  setStatus('tm_status', 'Transmission 配置已保存，刷新目标站点后生效');
+  setStatus('tm_status', 'Transmission 配置已保存并校验，刷新目标站点后生效');
 }
 async function testTransmission(mode){
   const cfg = collect();

@@ -1432,8 +1432,8 @@
   function transmissionSiteEnabledHere() {
     try {
       if (typeof GM_getValue === 'function' && Number(GM_getValue('__popcorn_tm_enabled', 0)) !== 1) return false;
-      const picked = tmParseCsv(typeof GM_getValue === 'function' ? GM_getValue('__popcorn_tm_sites', '') : '', ['PTP','BHD','BLU','CHD','ADE','GPW','BTN']);
-      const pickedSet = new Set((picked.length ? picked : ['PTP','BHD','BLU','CHD','ADE','GPW','BTN']).map(String));
+      const picked = tmParseCsv(typeof GM_getValue === 'function' ? GM_getValue('__popcorn_tm_sites', '') : '', []);
+      const pickedSet = new Set(picked.map(String));
       const here = tmCurrentSiteKeys();
       for (const k of here) if (pickedSet.has(k)) return true;
     } catch (_) {}

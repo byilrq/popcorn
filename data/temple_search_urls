@@ -12,14 +12,6 @@
   "used_site_info": "{\"Audiences\":{\"url\":\"https://audiences.me/\",\"enable\":0},\"BHD\":{\"url\":\"https://beyond-hd.me/\",\"enable\":0},\"BTN\":{\"url\":\"https://broadcasthe.net/\",\"enable\":0},\"CHDBits\":{\"url\":\"https://ptchdbits.co/\",\"enable\":0},\"GPW\":{\"url\":\"https://greatposterwall.com/\",\"enable\":0},\"MTeam\":{\"url\":\"https://kp.m-team.cc/\",\"enable\":0},\"OPS\":{\"url\":\"https://orpheus.network/\",\"enable\":0},\"OurBits\":{\"url\":\"https://ourbits.club/\",\"enable\":0},\"PTP\":{\"url\":\"https://passthepopcorn.me/\",\"enable\":0},\"RED\":{\"url\":\"https://redacted.sh/\",\"enable\":0},\"TTG\":{\"url\":\"https://totheglory.im/\",\"enable\":0}}",
   "site_order": "Audiences,BHD,BTN,CHDBits,GPW,MTeam,OPS,OurBits,PTP,RED,TTG",
   "extra_settings": "{\"ptp_show_douban\": {\"title\": \"PTP中文\", \"enable\": 1}, \"ptp_show_group_name\": {\"title\": \"PTP组名\", \"enable\": 1}, \"btn_dark_color\": {\"title\": \"妞暗色系\", \"enable\": 1}, \"other_douban_info\": {\"title\": \"中文信息\", \"enable\": 1}}",
-  "__popcorn_tm_enabled": 1,
-  "__popcorn_tm_rpc_lan": "http://192.168.31.6:9091",
-  "__popcorn_tm_rpc_wan": "http://域名:9091",
-  "__popcorn_tm_rpc_mode": "wan",
-  "__popcorn_tm_movie_dir": "/mv",
-  "__popcorn_tm_tv_dir": "/tv",
-  "__popcorn_tm_download_dir": "/mv",
-  "__popcorn_tm_sites": "PTP,BHD,CHD,ADE,GPW,BTN",
   "__popcorn_series_search_sites": "BHD,BTN,ADE",
   "__popcorn_dark_background_sites": "BHD"
 }
