@@ -1,48 +1,401 @@
 {
-  "ts": 1692794413251,
-  "data": {
-    "api_chosen": "s3",
-    "descr": "s",
-    "extra_settings": "s{\"ptp_show_douban\": {\"title\": \"PTP中文\", \"enable\": 1}, \"ptp_show_group_name\": {\"title\": \"PTP组名\", \"enable\": 1}, \"btn_dark_color\": {\"title\": \"妞暗色系\", \"enable\": 1}, \"other_douban_info\": {\"title\": \"中文信息\", \"enable\": 1}}",
-    "if_douban_jump": "n1",
-    "if_imdb_jump": "n1",
-    "if_uplver": "n1",
-    "imdb2db_chosen": "s0",
-    "ptp_name_location": "s1",
-    "setting_host": "s",
-    "setting_host_list": "s{}",
-    "show_search_urls": "s{\"PTP\":1,\"BHD\":1,\"CHD\":1,\"ADE\":1,\"GPW\":1,\"BTN\":1,\"豆瓣\":1,\"BLU\":1}",
-    "site_order": "sAudiences,BHD,BLU,BTN,CHDBits,GPW,MTeam,OPS,OurBits,PTP,RED,TTG",
-    "used_common_sites": "sPTP,BHD,BLU,CHD,ADE,GPW,BTN,豆瓣",
-    "used_ptp_img_key": "s",
-    "used_rehost_img_info": "s{\"freeimage\":{\"url\":\"https://freeimage.host/page/api\",\"api-url\":\"https://freeimage.host/api/1/upload\",\"api-key\":\"\"},\"imgbb\":{\"url\":\"https://api.imgbb.com/\",\"api-url\":\"https://api.imgbb.com/1/upload\",\"api-key\":\"\"},\"catbox\":{\"url\":\"https://catbox.moe/user/api.php\",\"api-url\":\"https://catbox.moe/user/api.php\"}}",
-    "used_search_list": "s<a href=\"https://passthepopcorn.me/torrents.php?searchstr={imdbid}\" target=\"_blank\">PTP</a>,<a href=\"https://beyond-hd.me/torrents?search={imdbid}\" target=\"_blank\">BHD</a>,<a href=\"https://blutopia.cc/torrents?imdbid={imdbno}&perPage=25&imdbId={imdbno}\" target=\"_blank\">BLU</a>,<a href=\"https://ptchdbits.co/torrents.php?incldead=0&spstate=0&inclbookmarked=0&search={imdbid}&search_area=4&search_mode=0\" target=\"_blank\">CHD</a>,<a href=\"https://audiences.me/torrents.php?cat401=1&cat402=1&cat403=1&incldead=0&spstate=0&inclbookmarked=0&search={imdbid}&search_area=4\" target=\"_blank\">ADE</a>,<a href=\"https://greatposterwall.com/torrents.php?searchstr={imdbid}\" target=\"_blank\">GPW</a>,<a href=\"https://broadcasthe.net/torrents.php?action=advanced&searchstr=&searchtags=&tags_type=1&groupdesc=&imdbid={imdbid}\" target=\"_blank\">BTN</a>,<a href=\"https://search.douban.com/movie/subject_search?search_text={imdbid}&cat=1002\" target=\"_blank\">豆瓣</a>",
-    "used_site_info": "s{\"Audiences\":{\"url\":\"https://audiences.me/\",\"enable\":0},\"BHD\":{\"url\":\"https://beyond-hd.me/\",\"enable\":0},\"BTN\":{\"url\":\"https://broadcasthe.net/\",\"enable\":0},\"CHDBits\":{\"url\":\"https://ptchdbits.co/\",\"enable\":0},\"GPW\":{\"url\":\"https://greatposterwall.com/\",\"enable\":0},\"MTeam\":{\"url\":\"https://kp.m-team.cc/\",\"enable\":0},\"OPS\":{\"url\":\"https://orpheus.network/\",\"enable\":0},\"OurBits\":{\"url\":\"https://ourbits.club/\",\"enable\":0},\"PTP\":{\"url\":\"https://passthepopcorn.me/\",\"enable\":0},\"RED\":{\"url\":\"https://redacted.sh/\",\"enable\":0},\"TTG\":{\"url\":\"https://totheglory.im/\",\"enable\":0},\"BLU\":{\"url\":\"https://blutopia.cc/\",\"enable\":0}}",
-    "used_tmdb_key": "s",
-    "__popcorn_dark_background_sites": "sBHD",
-    "__popcorn_custom_quick_search_library": "s[]",
-    "__popcorn_series_search_sites": "sBHD,BLU,BTN,ADE"
+  "__popcorn_config_schema": 3,
+  "__popcorn_config_note": "唯一出厂配置。仅首次安装导入；之后用户保存值永不由程序自动恢复或覆盖。",
+  "api_chosen": "3",
+  "extra_settings": {
+    "ptp_show_douban": {
+      "title": "PTP中文",
+      "enable": 1
+    },
+    "ptp_show_group_name": {
+      "title": "PTP组名",
+      "enable": 1
+    },
+    "btn_dark_color": {
+      "title": "妞暗色系",
+      "enable": 1
+    },
+    "other_douban_info": {
+      "title": "中文信息",
+      "enable": 1
+    }
   },
+  "if_douban_jump": 1,
+  "if_imdb_jump": 1,
+  "if_uplver": 1,
+  "imdb2db_chosen": "0",
+  "ptp_name_location": "1",
+  "tldomain": 0,
+  "used_ptp_img_key": "",
+  "used_tl_rss_key": "",
+  "used_tmdb_key": "",
+  "douban_poster_rehost": 0,
+  "hdb_hide_douban": 0,
+  "remote_server": null,
+  "chd_use_backup_url": 0,
+  "nhd_use_v6_url": 0,
   "show_search_urls": {
     "PTP": 1,
     "BHD": 1,
+    "BLU": 1,
     "CHD": 1,
     "ADE": 1,
     "GPW": 1,
     "BTN": 1,
-    "豆瓣": 1,
-    "BLU": 1
+    "豆瓣": 1
   },
-  "used_search_list": "<a href=\"https://passthepopcorn.me/torrents.php?searchstr={imdbid}\" target=\"_blank\">PTP</a>,<a href=\"https://beyond-hd.me/torrents?search={imdbid}\" target=\"_blank\">BHD</a>,<a href=\"https://blutopia.cc/torrents?imdbid={imdbno}&perPage=25&imdbId={imdbno}\" target=\"_blank\">BLU</a>,<a href=\"https://ptchdbits.co/torrents.php?incldead=0&spstate=0&inclbookmarked=0&search={imdbid}&search_area=4&search_mode=0\" target=\"_blank\">CHD</a>,<a href=\"https://audiences.me/torrents.php?cat401=1&cat402=1&cat403=1&incldead=0&spstate=0&inclbookmarked=0&search={imdbid}&search_area=4\" target=\"_blank\">ADE</a>,<a href=\"https://greatposterwall.com/torrents.php?searchstr={imdbid}\" target=\"_blank\">GPW</a>,<a href=\"https://broadcasthe.net/torrents.php?action=advanced&searchstr=&searchtags=&tags_type=1&groupdesc=&imdbid={imdbid}\" target=\"_blank\">BTN</a>,<a href=\"https://search.douban.com/movie/subject_search?search_text={imdbid}&cat=1002\" target=\"_blank\">豆瓣</a>",
-  "used_common_sites": "PTP,BHD,BLU,CHD,ADE,GPW,BTN,豆瓣",
-  "__popcorn_series_search_sites": "BHD,BLU,BTN,ADE",
-  "__popcorn_dark_background_sites": "BHD",
+  "site_order": [
+    "Audiences",
+    "BHD",
+    "BLU",
+    "BTN",
+    "CHDBits",
+    "GPW",
+    "MTeam",
+    "OPS",
+    "OurBits",
+    "PTP",
+    "RED",
+    "TTG"
+  ],
+  "used_common_sites": [
+    "PTP",
+    "BHD",
+    "BLU",
+    "CHD",
+    "ADE",
+    "GPW",
+    "BTN",
+    "豆瓣"
+  ],
+  "used_rehost_img_info": {
+    "freeimage": {
+      "url": "https://freeimage.host/page/api",
+      "api-url": "https://freeimage.host/api/1/upload",
+      "api-key": ""
+    },
+    "imgbb": {
+      "url": "https://api.imgbb.com/",
+      "api-url": "https://api.imgbb.com/1/upload",
+      "api-key": ""
+    },
+    "catbox": {
+      "url": "https://catbox.moe/user/api.php",
+      "api-url": "https://catbox.moe/user/api.php"
+    }
+  },
+  "used_search_list": [
+    "<a href=\"https://passthepopcorn.me/torrents.php?searchstr={imdbid}\" target=\"_blank\">PTP</a>",
+    "<a href=\"https://beyond-hd.me/torrents?search={imdbid}\" target=\"_blank\">BHD</a>",
+    "<a href=\"https://blutopia.cc/torrents?imdbid={imdbno}&perPage=25&imdbId={imdbno}\" target=\"_blank\">BLU</a>",
+    "<a href=\"https://ptchdbits.co/torrents.php?incldead=0&spstate=0&inclbookmarked=0&search={imdbid}&search_area=4&search_mode=0\" target=\"_blank\">CHD</a>",
+    "<a href=\"https://audiences.me/torrents.php?cat401=1&cat402=1&cat403=1&incldead=0&spstate=0&inclbookmarked=0&search={imdbid}&search_area=4\" target=\"_blank\">ADE</a>",
+    "<a href=\"https://greatposterwall.com/torrents.php?searchstr={imdbid}\" target=\"_blank\">GPW</a>",
+    "<a href=\"https://broadcasthe.net/torrents.php?action=advanced&searchstr=&searchtags=&tags_type=1&groupdesc=&imdbid={imdbid}\" target=\"_blank\">BTN</a>",
+    "<a href=\"https://search.douban.com/movie/subject_search?search_text={imdbid}&cat=1002\" target=\"_blank\">豆瓣</a>"
+  ],
+  "used_site_info": {
+    "Audiences": {
+      "url": "https://audiences.me/",
+      "enable": 0
+    },
+    "BHD": {
+      "url": "https://beyond-hd.me/",
+      "enable": 0
+    },
+    "BLU": {
+      "url": "https://blutopia.cc/",
+      "enable": 0
+    },
+    "BTN": {
+      "url": "https://broadcasthe.net/",
+      "enable": 0
+    },
+    "CHDBits": {
+      "url": "https://ptchdbits.co/",
+      "enable": 0
+    },
+    "GPW": {
+      "url": "https://greatposterwall.com/",
+      "enable": 0
+    },
+    "MTeam": {
+      "url": "https://kp.m-team.cc/",
+      "enable": 0
+    },
+    "OPS": {
+      "url": "https://orpheus.network/",
+      "enable": 0
+    },
+    "OurBits": {
+      "url": "https://ourbits.club/",
+      "enable": 0
+    },
+    "PTP": {
+      "url": "https://passthepopcorn.me/",
+      "enable": 0
+    },
+    "RED": {
+      "url": "https://redacted.sh/",
+      "enable": 0
+    },
+    "TTG": {
+      "url": "https://totheglory.im/",
+      "enable": 0
+    }
+  },
+  "__auto_feed_hidden_sites": [],
+  "__auto_feed_keepalive_enabled": 0,
+  "__auto_feed_keepalive_autoclose": 1,
+  "__auto_feed_keepalive_close_delay": 2,
+  "__auto_feed_keepalive_sites": [],
+  "__popcorn_series_search_sites": [
+    "BHD",
+    "BLU",
+    "BTN",
+    "ADE"
+  ],
+  "__popcorn_dark_background_sites": [
+    "BHD"
+  ],
+  "__popcorn_custom_quick_search_library": [],
   "__popcorn_tm_enabled": 1,
-  "__popcorn_tm_rpc_lan": "http://192.168.31.6:9091",
-  "__popcorn_tm_rpc_wan": "http://域名:9091",
+  "__popcorn_tm_rpc_lan": "",
+  "__popcorn_tm_rpc_wan": "",
   "__popcorn_tm_username": "",
   "__popcorn_tm_password": "",
   "__popcorn_tm_movie_dir": "/mv",
   "__popcorn_tm_tv_dir": "/tv",
-  "__popcorn_tm_sites": "PTP,BHD,BLU,CHD,ADE,GPW,BTN"
+  "__popcorn_tm_sites": [
+    "PTP",
+    "BHD",
+    "BLU",
+    "CHD",
+    "ADE",
+    "GPW",
+    "BTN"
+  ],
+  "__popcorn_quick_search_library": [
+    {
+      "name": "Audiences",
+      "href": "https://audiences.me/torrents.php?cat401=1&cat402=1&cat403=1&incldead=0&spstate=0&inclbookmarked=0&search={imdbid}&search_area=4",
+      "html": "<a href=\"https://audiences.me/torrents.php?cat401=1&cat402=1&cat403=1&incldead=0&spstate=0&inclbookmarked=0&search={imdbid}&search_area=4\" target=\"_blank\">Audiences</a>"
+    },
+    {
+      "name": "BHD",
+      "href": "https://beyond-hd.me/torrents?search={imdbid}",
+      "html": "<a href=\"https://beyond-hd.me/torrents?search={imdbid}\" target=\"_blank\">BHD</a>"
+    },
+    {
+      "name": "BLU",
+      "href": "https://blutopia.cc/torrents?imdbid={imdbno}&perPage=25&imdbId={imdbno}",
+      "html": "<a href=\"https://blutopia.cc/torrents?imdbid={imdbno}&perPage=25&imdbId={imdbno}\" target=\"_blank\">BLU</a>"
+    },
+    {
+      "name": "BTN",
+      "href": "https://broadcasthe.net/torrents.php?action=advanced&searchstr=&searchtags=&tags_type=1&groupdesc=&imdbid={imdbid}",
+      "html": "<a href=\"https://broadcasthe.net/torrents.php?action=advanced&searchstr=&searchtags=&tags_type=1&groupdesc=&imdbid={imdbid}\" target=\"_blank\">BTN</a>"
+    },
+    {
+      "name": "CHDBits",
+      "href": "https://ptchdbits.co/torrents.php?incldead=0&spstate=0&inclbookmarked=0&search={imdbid}&search_area=4&search_mode=0",
+      "html": "<a href=\"https://ptchdbits.co/torrents.php?incldead=0&spstate=0&inclbookmarked=0&search={imdbid}&search_area=4&search_mode=0\" target=\"_blank\">CHDBits</a>"
+    },
+    {
+      "name": "GPW",
+      "href": "https://greatposterwall.com/torrents.php?searchstr={imdbid}",
+      "html": "<a href=\"https://greatposterwall.com/torrents.php?searchstr={imdbid}\" target=\"_blank\">GPW</a>"
+    },
+    {
+      "name": "MTeam",
+      "href": "https://kp.m-team.cc/torrents.php?search={imdbid}",
+      "html": "<a href=\"https://kp.m-team.cc/torrents.php?search={imdbid}\" target=\"_blank\">MTeam</a>"
+    },
+    {
+      "name": "OPS",
+      "href": "https://orpheus.network/torrents.php?searchstr={search_name}",
+      "html": "<a href=\"https://orpheus.network/torrents.php?searchstr={search_name}\" target=\"_blank\">OPS</a>"
+    },
+    {
+      "name": "OurBits",
+      "href": "https://ourbits.club/torrents.php?search={imdbid}",
+      "html": "<a href=\"https://ourbits.club/torrents.php?search={imdbid}\" target=\"_blank\">OurBits</a>"
+    },
+    {
+      "name": "PTP",
+      "href": "https://passthepopcorn.me/torrents.php?searchstr={imdbid}",
+      "html": "<a href=\"https://passthepopcorn.me/torrents.php?searchstr={imdbid}\" target=\"_blank\">PTP</a>"
+    },
+    {
+      "name": "RED",
+      "href": "https://redacted.sh/torrents.php?searchstr={search_name}",
+      "html": "<a href=\"https://redacted.sh/torrents.php?searchstr={search_name}\" target=\"_blank\">RED</a>"
+    },
+    {
+      "name": "TTG",
+      "href": "https://totheglory.im/browse.php?search_field=imdb{imdbno}&c=M",
+      "html": "<a href=\"https://totheglory.im/browse.php?search_field=imdb{imdbno}&c=M\" target=\"_blank\">TTG</a>"
+    },
+    {
+      "name": "豆瓣",
+      "href": "https://search.douban.com/movie/subject_search?search_text={imdbid}&cat=1002",
+      "html": "<a href=\"https://search.douban.com/movie/subject_search?search_text={imdbid}&cat=1002\" target=\"_blank\">豆瓣</a>"
+    }
+  ],
+  "__popcorn_forward_site_allowlist": [
+    "Audiences",
+    "BHD",
+    "BTN",
+    "CHDBits",
+    "GPW",
+    "MTeam",
+    "OPS",
+    "OurBits",
+    "PTP",
+    "RED",
+    "TTG"
+  ],
+  "__popcorn_allowed_hosts": [
+    "audiences.me",
+    "backup.landof.tv",
+    "beyond-hd.me",
+    "blutopia.cc",
+    "broadcasthe.net",
+    "douban.com",
+    "greatposterwall.com",
+    "imdb.com",
+    "kp.m-team.cc",
+    "m.douban.com",
+    "movie.douban.com",
+    "orpheus.network",
+    "ourbits.club",
+    "passthepopcorn.me",
+    "ptchdbits.co",
+    "redacted.ch",
+    "redacted.sh",
+    "search.douban.com",
+    "totheglory.im",
+    "www.douban.com",
+    "www.imdb.com",
+    "zp.m-team.io"
+  ],
+  "__popcorn_api_endpoints": [
+    "https://api.iyuu.cn/App.Movie.Ptgen",
+    "https://ptgen.tju.pt/infogen"
+  ],
+  "__popcorn_keepalive_interval_days": 7,
+  "host_link": "",
+  "used_signin_sites": [],
+  "__yadg_host": "https://yadg.cc",
+  "__yadg_apiToken": "",
+  "__yadg_defaultTemplate": 5,
+  "__yadg_defaultTarget": "other",
+  "__yadg_descriptionTarget": "album",
+  "__yadg_defaultScraper": "",
+  "__yadg_fetchImage": false,
+  "__yadg_autoPreview": false,
+  "__yadg_autoRehost": false,
+  "__yadg_autoSelectScraper": false,
+  "__yadg_coverSize": "",
+  "__yadg_replaceDescriptionOnpthupload": true,
+  "__yadg_replaceDescriptionOnlemonhdupload": true,
+  "__yadg_replaceDescriptionOnopencdupload": true,
+  "__yadg_replaceDescriptionOnpthrequest": true,
+  "__yadg_replaceDescriptionOnopsupload": true,
+  "__yadg_replaceDescriptionOnopsrequest": true,
+  "__yadg_replaceDescriptionOndicupload": true,
+  "__yadg_replaceDescriptionOndicrequest": true,
+  "region_code": "",
+  "__popcorn_site_catalog": {
+    "FRDS": "https://pt.keepfrds.com/",
+    "BYR": "https://byr.pt/",
+    "avz": "https://avistaz.to/",
+    "PHD": "https://privatehd.to/",
+    "PTP": "https://passthepopcorn.me/",
+    "REMOVED_HDT": "https://removed-hdt.invalid/",
+    "MTV": "https://www.morethantv.me/",
+    "BHD": "https://beyond-hd.me/",
+    "BLU": "https://blutopia.cc/",
+    "Aither": "https://aither.cc/",
+    "REMOVED_DarkLand": "https://removed-darkland.invalid/",
+    "FNP": "https://fearnopeer.com/",
+    "OnlyEncodes": "https://onlyencodes.cc/",
+    "TorrentLeech": "https://www.torrentleech.org/",
+    "xthor": "https://xthor.tk/",
+    "REMOVED_FileList": "https://removed-filelist.invalid/",
+    "HDF": "https://hdf.world/",
+    "REMOVED_HDB": "https://removed-hdb.invalid/",
+    "BTN": "https://broadcasthe.net/",
+    "RED": "https://redacted.sh/",
+    "OpenCD": "https://open.cd/",
+    "U2": "https://u2.dmhy.org/",
+    "jpop": "https://jpopsuki.eu/",
+    "REMOVED_CG": "http://removed-cg.invalid/",
+    "REMOVED_KG": "https://removed-kg.invalid/",
+    "REMOVED_SC": "https://removed-sc.invalid/",
+    "iTS": "https://shadowthein.net/",
+    "HDRoute": "http://hdroute.org/",
+    "REMOVED_HDSpace": "https://removed-hdspace.invalid/",
+    "ACM": "https://eiga.moi/",
+    "HDOli": "https://hd-olimpo.club/",
+    "Tik": "https://cinematik.net/",
+    "CNZ": "https://cinemaz.to/",
+    "GPW": "https://greatposterwall.com/",
+    "HD-Only": "https://hd-only.org/",
+    "NBL": "https://nebulance.io/",
+    "ANT": "https://anthelion.me/",
+    "IPT": "https://iptorrents.com/",
+    "torrentseeds": "https://torrentseeds.org/",
+    "IN": "https://nzbs.in/",
+    "HOU": "https://house-of-usenet.com/",
+    "OMG": "https://omgwtfnzbs.org/",
+    "digitalcore": "https://digitalcore.club/",
+    "BlueBird": "https://bluebird-hd.org/",
+    "bwtorrents": "https://bwtorrents.tv/",
+    "lztr": "https://lztr.me/",
+    "DICMusic": "https://dicmusic.com/",
+    "OPS": "https://orpheus.network/",
+    "bib": "https://bibliotik.me/",
+    "mam": "https://www.myanonamouse.net",
+    "bit-hdtv": "https://www.bit-hdtv.com/",
+    "TVV": "http://tv-vault.me/",
+    "SugoiMusic": "https://sugoimusic.me/",
+    "Monika": "https://monikadesign.uk/",
+    "DTR": "https://torrent.desi/",
+    "HONE": "https://hawke.uno/",
+    "ZHUQUE": "https://zhuque.in/",
+    "YemaPT": "https://www.yemapt.org/",
+    "SpeedApp": "https://speedapp.io/",
+    "MTeam": "https://kp.m-team.cc/",
+    "ReelFliX": "https://reelflix.cc/",
+    "HHClub": "https://hhanclub.net/",
+    "SportsCult": "https://sportscult.org/"
+  },
+  "__popcorn_torrentleech_domains": [
+    "https://www.torrentleech.org/",
+    "https://www.torrentleech.me/",
+    "https://www.torrentleech.cc/",
+    "https://www.tlgetin.cc/"
+  ],
+  "__popcorn_service_endpoints": {
+    "legacy_ptgen_page": "https://api.iyuu.cn/ptgen/",
+    "douban_suggest": "https://movie.douban.com/j/subject_suggest?q=",
+    "douban_mobile_search": "https://m.douban.com/search/?query=",
+    "douban_mobile_subject": "https://m.douban.com/movie/subject/",
+    "tmdb_api_base": "https://api.themoviedb.org/3",
+    "tmdb_image_base": "https://image.tmdb.org/t/p",
+    "tvmaze_api_base": "https://api.tvmaze.com",
+    "mteam_api_base": "https://api.m-team.io",
+    "omdb_api_base": "https://www.omdbapi.com/",
+    "omdb_api_key": "2edf5c13",
+    "ptpimg_base": "https://ptpimg.me",
+    "ptpimg_upload": "https://ptpimg.me/upload.php",
+    "pixhost_base": "https://pixhost.to",
+    "pixhost_remote": "https://pixhost.to/remote/",
+    "pixhost_upload": "https://pixhost.to/new-upload/",
+    "imdb_ratings_base": "http://p.media-imdb.com/static-content/documents/v1/title/"
+  },
+  "__yadg_deezer_api_base": "https://api.deezer.com",
+  "__popcorn_chd_backup_url_template": "https://{region}.chddiy.xyz/",
+  "__popcorn_nhd_v6_url": "https://v6.nexushd.org/"
 }

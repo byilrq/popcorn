@@ -60,7 +60,7 @@
     <div class="stack">
       <label><input type="checkbox" id="keepalive_enabled"> 开启每周一次自动登录保活</label>
       <label><input type="checkbox" id="keepalive_autoclose"> 访问后自动关闭后台标签页</label>
-      <label>自动关闭延迟秒数<input id="keepalive_close_delay" type="number" min="1" max="30" value="2" class="short-input"></label>
+      <label>自动关闭延迟秒数<input id="keepalive_close_delay" type="number" min="0" max="30" class="short-input"></label>
     </div>
     <div class="row signin-add">
       <input id="signin_name" placeholder="站点名称，例如 TTG">
@@ -82,8 +82,8 @@
     <p class="muted small">在已勾选站点的种子列表 [DL] 左边显示 TM / TV，点击后分别推送到电影路径 / 剧集路径。配置默认只读，点击“修改”后才能编辑，保存后生效。</p>
     <div class="tm-panel">
       <div class="form-grid tm-config-grid">
-        <label>局域网 RPC 地址<input id="tm_rpc_lan" placeholder="请填写局域网 RPC 地址" disabled></label>
-        <label>外网 RPC 地址<input id="tm_rpc_wan" placeholder="请填写外网 RPC 地址" disabled></label>
+        <label>局域网 RPC 地址（http://192.168.31.6:9091）<input id="tm_rpc_lan" disabled></label>
+        <label>外网 RPC 地址（http://域名:9091）<input id="tm_rpc_wan" disabled></label>
         <label>电影保存路径<input id="tm_movie_dir" placeholder="请填写电影保存路径" disabled></label>
         <label>剧集保存路径<input id="tm_tv_dir" placeholder="请填写剧集保存路径" disabled></label>
         <label>用户名<input id="tm_username" autocomplete="username" disabled></label>
@@ -113,12 +113,11 @@
 
   <section class="card tab-panel" id="tab-advanced">
     <h2>高级配置 JSON</h2>
-    <div class="row"><button id="save_json">保存 JSON</button><button id="reset">恢复内置备份</button><button id="export">导出</button><label class="file">导入<input type="file" id="import" accept="application/json,.json"></label></div>
+    <div class="row"><button id="save_json">保存 JSON</button><button id="export">导出</button><label class="file">导入<input type="file" id="import" accept="application/json,.json"></label></div>
     <p id="json_status" class="status"></p>
     <textarea id="json" spellcheck="false"></textarea>
   </section>
 </main>
-<script src="defaults.js"></script>
 <script src="options.js"></script>
 </body>
 </html>

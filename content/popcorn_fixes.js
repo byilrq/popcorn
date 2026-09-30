@@ -1,6 +1,17 @@
 // Popcorn extension site-specific fixes loaded after the original userscript.
 // Keeps the upstream userscript mostly intact while patching browser-extension compatibility gaps.
 (() => {
+  function popcornServiceConfig() {
+    let raw;
+    try { raw = typeof window.GM_getValue === 'function' ? window.GM_getValue('__popcorn_service_endpoints') : undefined; } catch (_) {}
+    if (raw && typeof raw === 'object' && !Array.isArray(raw)) return raw;
+    if (typeof raw === 'string' && raw) { try { const x=JSON.parse(raw); if (x && typeof x === 'object' && !Array.isArray(x)) return x; } catch (_) {} }
+    return {};
+  }
+  const POPCORN_SERVICES = popcornServiceConfig();
+  const POPCORN_DOUBAN_SUGGEST = String(POPCORN_SERVICES.douban_suggest || '');
+  const POPCORN_DOUBAN_MOBILE_SEARCH = String(POPCORN_SERVICES.douban_mobile_search || '');
+  const POPCORN_DOUBAN_MOBILE_SUBJECT = String(POPCORN_SERVICES.douban_mobile_subject || '');
   if (window.__POPCORN_FIXES_V40__) return;
   window.__POPCORN_FIXES_V40__ = true;
 
@@ -24,17 +35,6 @@
     document.documentElement.appendChild(st);
   } catch (_) {}
 
-  const DEFAULT_QUICK_SEARCH = [
-    '<a href="https://passthepopcorn.me/torrents.php?searchstr={imdbid}" target="_blank">PTP</a>',
-    '<a href="https://beyond-hd.me/torrents?search={imdbid}" target="_blank">BHD</a>',
-    '<a href="https://blutopia.cc/torrents?imdbid={imdbno}&perPage=25&imdbId={imdbno}" target="_blank">BLU</a>',
-    '<a href="https://ptchdbits.co/torrents.php?incldead=0&spstate=0&inclbookmarked=0&search={imdbid}&search_area=4&search_mode=0" target="_blank">CHD</a>',
-    '<a href="https://audiences.me/torrents.php?cat401=1&cat402=1&cat403=1&incldead=0&spstate=0&inclbookmarked=0&search={imdbid}&search_area=4" target="_blank">ADE</a>',
-    '<a href="https://greatposterwall.com/torrents.php?searchstr={imdbid}" target="_blank">GPW</a>',
-    '<a href="https://broadcasthe.net/torrents.php?action=advanced&searchstr=&searchtags=&tags_type=1&groupdesc=&imdbid={imdbid}" target="_blank">BTN</a>',
-    '<a href="https://search.douban.com/movie/subject_search?search_text={imdbid}&cat=1002" target="_blank">豆瓣</a>'
-  ];
-
   function text(v) { return v == null ? '' : String(v); }
   function unique(arr) { return Array.from(new Set(arr.filter(Boolean))); }
   function parseCsvJson(v, fallback) {
@@ -45,8 +45,8 @@
     return fallback || [];
   }
   function quickSearchList() {
-    try { return parseCsvJson(window.GM_getValue('used_search_list'), DEFAULT_QUICK_SEARCH); }
-    catch (_) { return DEFAULT_QUICK_SEARCH; }
+    try { return parseCsvJson(window.GM_getValue('used_search_list'), []); }
+    catch (_) { return []; }
   }
   function request(url, responseType) {
     return new Promise((resolve, reject) => {
@@ -162,7 +162,7 @@
       }
     } catch (_) {}
     try {
-      const res = await fetchResponseText('https://m.douban.com/movie/subject/' + id + '/');
+      const res = await fetchResponseText(POPCORN_DOUBAN_MOBILE_SUBJECT + id + '/');
       if (res.status !== 429 && !/429\s+Too\s+Many\s+Requests/i.test(res.text.slice(0, 1000))) {
         const info = mergeAndCache(doubanInfoFromMobileHtml(res.text, id));
         if (info && (info.average || info.title || info.summary)) return info;
@@ -180,7 +180,7 @@
   }
   async function doubanBySuggest(query) {
     if (!query) return null;
-    const data = await fetchJson('https://movie.douban.com/j/subject_suggest?q=' + encodeURIComponent(query));
+    const data = await fetchJson(POPCORN_DOUBAN_SUGGEST + encodeURIComponent(query));
     if (Array.isArray(data) && data.length) {
       let item = data.find(x => x && (x.type === 'movie' || x.type === 'tv')) || data[0];
       const id = item && (item.id || subjectIdFromText(item.url));
@@ -201,7 +201,7 @@
   }
   async function doubanByMobileSearch(query) {
     if (!query) return null;
-    const html = await fetchText('https://m.douban.com/search/?query=' + encodeURIComponent(query) + '&type=movie');
+    const html = await fetchText(POPCORN_DOUBAN_MOBILE_SEARCH + encodeURIComponent(query) + '&type=movie');
     const id = subjectIdFromText(html);
     if (!id) return null;
     const full = await doubanBySubjectId(id).catch(() => null) || { id, title:'', average:'', votes:'', summary:'', url:DOUBAN_PREFIX + id + '/' };
@@ -227,7 +227,7 @@
     if (cached) return cached;
     const queries = unique([q, q + ' 第一季', q + ' Season 1']);
     for (const query of queries) {
-      const data = await fetchJson('https://movie.douban.com/j/subject_suggest?q=' + encodeURIComponent(query)).catch(() => null);
+      const data = await fetchJson(POPCORN_DOUBAN_SUGGEST + encodeURIComponent(query)).catch(() => null);
       const items = Array.isArray(data) ? data : [];
       for (const item of items.slice(0, 5)) {
         const id = item && (item.id || subjectIdFromText(item.url));
@@ -980,7 +980,6 @@
   }
 
   function selectedSeriesSearchSites() {
-    const fallback = ['BHD', 'BTN', 'ADE'];
     let raw = null;
     try { raw = window.GM_getValue('__popcorn_series_search_sites'); } catch (_) {}
     let arr = [];
@@ -990,7 +989,7 @@
       catch (_) { arr = raw.split(','); }
     }
     arr = arr.map(x => String(x || '').trim()).filter(Boolean);
-    return new Set(arr.length ? arr : fallback);
+    return new Set(arr);
   }
 
   function siteKeyFromAnchor(a) {

@@ -164,10 +164,10 @@ Sandbox = JSandbox;
 Here you can set site specific default templates.
 You can find a list of available templates at: https://yadg.cc/api/v2/templates/
 */
-const defaultPTHFormat = 5;
-const defaultWafflesFormat = 9;
-const defaultPTHTarget = 'other';
-const defaultPTHDescriptionTarget = 'album';
+const defaultPTHFormat = typeof GM_getValue === 'function' ? GM_getValue('__yadg_defaultTemplate', '') : '';
+const defaultWafflesFormat = '';
+const defaultPTHTarget = typeof GM_getValue === 'function' ? GM_getValue('__yadg_defaultTarget', '') : '';
+const defaultPTHDescriptionTarget = typeof GM_getValue === 'function' ? GM_getValue('__yadg_descriptionTarget', '') : '';
 let yadg; // eslint-disable-line prefer-const
 let factory; // eslint-disable-line prefer-const
 let yadgRenderer; // eslint-disable-line prefer-const
@@ -382,7 +382,7 @@ function fetchImage(target, callback) {
             const id = helper[3];
             GM_xmlhttpRequest({
                 method: 'GET',
-                url: 'https://api.deezer.com/album/' + id,
+                url: String(GM_getValue('__yadg_deezer_api_base', '') || '').replace(/\/$/, '') + '/album/' + id,
                 onload(response) {
                     if (response.status === 200) {
                         const data = JSON.parse(response.responseText);
@@ -645,6 +645,28 @@ function LocalStorageWrapper(appPrefix) {
     };
 }
 
+
+// Popcorn extension configuration adapter. User-editable YADG settings are stored in
+// chrome.storage.local through the GM bridge, so they share the same single runtime
+// configuration source as the rest of Popcorn. Cache-only YADG data stays in localStorage.
+function GMConfigStorageWrapper(prefix) {
+    'use strict';
+    const normalizedPrefix = String(prefix || '__yadg_');
+    const fullKey = key => normalizedPrefix + String(key);
+    return {
+        isLocalStorageAvailable() { return typeof GM_getValue === 'function'; },
+        getKeyPrefix() { return normalizedPrefix; },
+        addItem(key, value) { GM_setValue(fullKey(key), value); },
+        getItem(key) {
+            const value = GM_getValue(fullKey(key));
+            return value === undefined ? null : value;
+        },
+        getAllKeys() { return []; },
+        removeItem(key) { GM_deleteValue(fullKey(key)); return true; },
+        removeAll() { return false; },
+    };
+}
+
 // --------- THIRD PARTY CODE AREA END ---------
 
 const yadgUtil = {
@@ -703,7 +725,7 @@ const yadgUtil = {
 
     storage: new LocalStorageWrapper('yadg'),
 
-    settings: new LocalStorageWrapper('yadgSettings'),
+    settings: new GMConfigStorageWrapper('__yadg_'),
 };
 
 // Very simple wrapper for XmlHttpRequest
@@ -1198,35 +1220,7 @@ factory = {
     },
 
     initializeSettings() {
-        let settingsVer = yadgUtil.settings.getItem(factory.KEY_SETTINGS_INIT_VER);
-        const currentVer = 1;
-
-        if (!settingsVer) {
-            settingsVer = 0;
-        }
-
-        if (settingsVer < currentVer) {
-            // Replace descriptions on upload and new request pages
-            const locations = [
-                'pth_upload',
-                'lemonhd_upload',
-                'opencd_upload',
-                'pth_request',
-                'ops_upload',
-                'ops_request',
-                'dic_upload',
-                'dic_request',
-            ];
-            for (const loc of locations) {
-                const replaceDescSettingKey = factory.makeReplaceDescriptionSettingsKey(
-                    loc,
-                );
-
-                yadgUtil.settings.addItem(replaceDescSettingKey, true);
-            }
-        }
-
-        yadgUtil.settings.addItem(factory.KEY_SETTINGS_INIT_VER, currentVer);
+        // Deliberately no migration/default writeback. Existing user configuration wins.
     },
 
     populateSettings() {
@@ -1359,42 +1353,14 @@ factory = {
             yadgUtil.settings.addItem(factory.KEY_COVER_SIZE, currentCoverSize);
         }
 
-        if (apiToken === '') {
-            yadgUtil.settings.removeItem(factory.KEY_API_TOKEN);
-        } else {
-            yadgUtil.settings.addItem(factory.KEY_API_TOKEN, apiToken);
-        }
+        yadgUtil.settings.addItem(factory.KEY_API_TOKEN, apiToken);
 
         const replaceDescSettingKey = factory.getReplaceDescriptionSettingKey();
-        if (replaceDescription) {
-            yadgUtil.settings.addItem(replaceDescSettingKey, true);
-        } else {
-            yadgUtil.settings.removeItem(replaceDescSettingKey);
-        }
-
-        if (fetchImage) {
-            yadgUtil.settings.addItem(factory.KEY_FETCH_IMAGE, true);
-        } else {
-            yadgUtil.settings.removeItem(factory.KEY_FETCH_IMAGE);
-        }
-
-        if (autoRehost) {
-            yadgUtil.settings.addItem(factory.KEY_AUTO_REHOST, true);
-        } else if (!autoRehost && autoRehostCheckbox) {
-            yadgUtil.settings.removeItem(factory.KEY_AUTO_REHOST);
-        }
-
-        if (autoPreview) {
-            yadgUtil.settings.addItem(factory.KEY_AUTO_PREVIEW, true);
-        } else {
-            yadgUtil.settings.removeItem(factory.KEY_AUTO_PREVIEW);
-        }
-
-        if (autoSelectScraper) {
-            yadgUtil.settings.addItem(factory.KEY_AUTO_SELECT_SCRAPER, true);
-        } else {
-            yadgUtil.settings.removeItem(factory.KEY_AUTO_SELECT_SCRAPER);
-        }
+        yadgUtil.settings.addItem(replaceDescSettingKey, !!replaceDescription);
+        yadgUtil.settings.addItem(factory.KEY_FETCH_IMAGE, !!fetchImage);
+        if (autoRehostCheckbox) yadgUtil.settings.addItem(factory.KEY_AUTO_REHOST, !!autoRehost);
+        yadgUtil.settings.addItem(factory.KEY_AUTO_PREVIEW, !!autoPreview);
+        yadgUtil.settings.addItem(factory.KEY_AUTO_SELECT_SCRAPER, !!autoSelectScraper);
     },
 
     setDescriptionBoxValue(value) {
@@ -3093,7 +3059,7 @@ yadgRenderer = {
 };
 
 yadg = {
-    yadgHost: 'https://yadg.cc',
+    yadgHost: typeof GM_getValue === 'function' ? GM_getValue('__yadg_host', '') : '',
     baseURI: '/api/v2/',
 
     standardError:

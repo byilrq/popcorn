@@ -3,9 +3,6 @@
   const init = window.__AUTO_FEED_EXT_INIT__ || { storage:{}, extensionBase:'' };
   window.unsafeWindow = window;
   const cache = Object.assign(Object.create(null), init.storage || {});
-  if (!cache.host_link) {
-    try { cache.host_link = location.origin + '/usercp.php?action=personal'; } catch (e) {}
-  }
   let seq = 1;
   const pending = new Map();
 
@@ -90,9 +87,6 @@
   }
 
   window.GM_getValue = function(key, defaultValue) {
-    if (key === 'host_link' && !Object.prototype.hasOwnProperty.call(cache, key)) {
-      try { return location.origin + '/usercp.php?action=personal'; } catch (e) {}
-    }
     return Object.prototype.hasOwnProperty.call(cache, key) ? cache[key] : defaultValue;
   };
   window.GM_setValue = function(key, value) {

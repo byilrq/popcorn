@@ -1,16 +1,22 @@
 const $ = (id) => document.getElementById(id);
 const $$ = (sel, root=document) => root ? Array.from(root.querySelectorAll(sel)) : [];
-const D = window.AUTO_FEED_DEFAULTS;
 let current = {};
 let quickSearchLibrary = [];
 let customQuickSearchLibrary = [];
 
-const QUICK_DEFAULT_KEYS = ['PTP','BHD','CHD','ADE','GPW','BTN','豆瓣'];
 const QUICK_SITE_KEY_MAP = { PTP:'PTP', BHD:'BHD', CHD:'CHD', ADE:'ADE', GPW:'GPW', BTN:'BTN', '豆瓣':'豆瓣', Douban:'豆瓣' };
-const DEFAULT_SERIES_SEARCH_SITES = ['BHD','BTN','ADE'];
-const DEFAULT_DARK_BACKGROUND_SITES = ['BHD'];
-const FORWARD_SITE_ALLOWLIST = ['Audiences','BHD','BTN','CHDBits','GPW','MTeam','OPS','OurBits','PTP','RED','TTG'];
-function isForwardSettingSite(k){ return FORWARD_SITE_ALLOWLIST.includes(k); }
+function configArray(key) {
+  const value = current ? current[key] : undefined;
+  if (Array.isArray(value)) return value.slice();
+  const parsed = parseMaybeJson(value, null);
+  if (Array.isArray(parsed)) return parsed;
+  if (typeof parsed === 'string') return parsed.split(',').map(x=>x.trim()).filter(Boolean);
+  return [];
+}
+function isForwardSettingSite(k){
+  const allow = configArray('__popcorn_forward_site_allowlist');
+  return allow.includes(k);
+}
 function seriesKeyFromHtml(html){
   const known = quickSiteKeyFromHtml(html);
   if (known) return known;
@@ -18,8 +24,7 @@ function seriesKeyFromHtml(html){
 }
 function normalizeSeriesSearchSites(list, searchList){
   const available = Array.from(new Set((searchList || []).map(seriesKeyFromHtml).filter(Boolean)));
-  let picked = Array.isArray(list) ? list.map(x => String(x || '').trim()).filter(Boolean) : [];
-  if (!picked.length) picked = DEFAULT_SERIES_SEARCH_SITES.slice();
+  const picked = Array.isArray(list) ? list.map(x => String(x || '').trim()).filter(Boolean) : [];
   return Array.from(new Set(picked)).filter(k => available.includes(k));
 }
 function normalizeDarkBackgroundSites(list, searchList){
@@ -72,27 +77,12 @@ function mergeQuickLibraries(base, custom){
   });
   return out;
 }
-const LEGACY_QUICK_KEYS = ['PTP','BHD','GPW'];
 function normalizeSearchList(lines){
-  const list = (Array.isArray(lines) ? lines : []).map(x => String(x || '').trim()).filter(Boolean);
-  const keys = list.map(quickKeyFromHtml).filter(Boolean);
-  const looksLegacy = LEGACY_QUICK_KEYS.every(k => keys.includes(k)) && !keys.includes('CHD') && !keys.includes('ADE') && !keys.includes('BTN') && !keys.includes('豆瓣');
-  if (!list.length || looksLegacy) return structuredClone(D.default_search_list);
-  return list;
+  return (Array.isArray(lines) ? lines : []).map(x => String(x || '').trim()).filter(Boolean);
 }
 function quickItemHtml(key){
   const item = quickSearchLibrary.find(x => x.name.toLowerCase() === String(key).toLowerCase());
-  if (item && item.html) return item.html;
-  const fallback = {
-    "PTP": "<a href=\"https://passthepopcorn.me/torrents.php?searchstr={imdbid}\" target=\"_blank\">PTP</a>",
-    "BHD": "<a href=\"https://beyond-hd.me/torrents?search={imdbid}\" target=\"_blank\">BHD</a>",
-    "CHD": "<a href=\"https://ptchdbits.co/torrents.php?incldead=0&spstate=0&inclbookmarked=0&search={imdbid}&search_area=4&search_mode=0\" target=\"_blank\">CHD</a>",
-    "ADE": "<a href=\"https://audiences.me/torrents.php?cat401=1&cat402=1&cat403=1&incldead=0&spstate=0&inclbookmarked=0&search={imdbid}&search_area=4\" target=\"_blank\">ADE</a>",
-    "GPW": "<a href=\"https://greatposterwall.com/torrents.php?searchstr={imdbid}\" target=\"_blank\">GPW</a>",
-    "BTN": "<a href=\"https://broadcasthe.net/torrents.php?action=advanced&searchstr=&searchtags=&tags_type=1&groupdesc=&imdbid={imdbid}\" target=\"_blank\">BTN</a>",
-    "豆瓣": "<a href=\"https://search.douban.com/movie/subject_search?search_text={imdbid}&cat=1002\" target=\"_blank\">豆瓣</a>"
-  };
-  return fallback[key] || '';
+  return item && item.html ? item.html : '';
 }
 function quickKeyFromHtml(html){
   const name = extractAnchorName(html).toLowerCase();
@@ -131,23 +121,6 @@ function normalizeUrl(u){
   try { const x = new URL(u); return x.href; } catch { return ''; }
 }
 
-const KEEPALIVE_INTERVAL_MS = 7 * 24 * 60 * 60 * 1000;
-
-function formatSigninTime(iso){
-  if (!iso) return '从未成功';
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return String(iso);
-  return d.toLocaleString('zh-CN', { hour12:false });
-}
-function formatNextKeepaliveTime(iso){
-  if (!iso) return '等待首次成功';
-  const last = new Date(iso);
-  if (Number.isNaN(last.getTime())) return '时间无效';
-  const next = new Date(last.getTime() + KEEPALIVE_INTERVAL_MS);
-  const now = Date.now();
-  if (next.getTime() <= now) return '已到期，下次启动会执行';
-  return next.toLocaleString('zh-CN', { hour12:false });
-}
 function signinStatusText(x){
   if (!x || !x.lastStatus) return '未运行';
   if (x.lastStatus === 'success') return '成功';
@@ -174,42 +147,35 @@ function extractAnchorHref(html){
 }
 
 function defaultsState(data){
+  data = data || {};
   const hidden = parseCsvJson(data.__auto_feed_hidden_sites, []);
-  const usedSiteInfo = parseMaybeJson(data.used_site_info, structuredClone(D.default_site_info));
-  for (const [k,v] of Object.entries(D.default_site_info)) if (!usedSiteInfo[k]) usedSiteInfo[k]=structuredClone(v);
-  for (const k of hidden) if (usedSiteInfo[k]) usedSiteInfo[k].enable = 0;
-  const siteOrderRaw = parseCsvJson(data.site_order, Object.keys(D.default_site_info).sort());
-  const siteOrder = siteOrderRaw.filter(k=>D.default_site_info[k] && !hidden.includes(k));
-  for (const k of Object.keys(D.default_site_info).sort()) if (!siteOrder.includes(k) && !hidden.includes(k)) siteOrder.push(k);
-  let common = parseCsvJson(data.used_common_sites, D.default_common_sites).filter(k=>!hidden.includes(k));
-  const rawShowSearch = parseMaybeJson(data.show_search_urls, structuredClone(D.default_show_search_urls));
-  const showSearch = {};
-  for (const k of Object.keys(D.default_show_search_urls)) showSearch[k] = rawShowSearch && rawShowSearch[k] !== 0 ? 1 : 0;
-  const extra = parseMaybeJson(data.extra_settings, structuredClone(D.default_extra_settings));
-  for (const [k,v] of Object.entries(D.default_extra_settings)) if (!extra[k]) extra[k]=structuredClone(v);
-  const rehost = parseMaybeJson(data.used_rehost_img_info, structuredClone(D.default_rehost_img_info));
-  for (const [k,v] of Object.entries(D.default_rehost_img_info)) if (!rehost[k]) rehost[k]=structuredClone(v);
-  const searchList = normalizeSearchList(parseCsvJson(data.used_search_list, D.default_search_list));
-  const derivedCommon = Array.from(new Set(searchList.map(quickSiteKeyFromHtml).filter(Boolean))).filter(k=>!hidden.includes(k));
-  if (!common.length || JSON.stringify(common) !== JSON.stringify(derivedCommon)) common = derivedCommon;
+  const usedSiteInfo = parseMaybeJson(data.used_site_info, {});
+  const cleanSiteInfo = usedSiteInfo && typeof usedSiteInfo === 'object' && !Array.isArray(usedSiteInfo) ? structuredClone(usedSiteInfo) : {};
+  for (const k of hidden) if (cleanSiteInfo[k]) cleanSiteInfo[k].enable = 0;
+  const siteOrderRaw = parseCsvJson(data.site_order, Object.keys(cleanSiteInfo));
+  const siteOrder = siteOrderRaw.filter(k=>cleanSiteInfo[k] && !hidden.includes(k));
+  const common = parseCsvJson(data.used_common_sites, []).filter(k=>!hidden.includes(k));
+  const rawShowSearch = parseMaybeJson(data.show_search_urls, {});
+  const showSearch = rawShowSearch && typeof rawShowSearch === 'object' && !Array.isArray(rawShowSearch) ? structuredClone(rawShowSearch) : {};
+  const rawExtra = parseMaybeJson(data.extra_settings, {});
+  const extra = rawExtra && typeof rawExtra === 'object' && !Array.isArray(rawExtra) ? structuredClone(rawExtra) : {};
+  const rawRehost = parseMaybeJson(data.used_rehost_img_info, {});
+  const rehost = rawRehost && typeof rawRehost === 'object' && !Array.isArray(rawRehost) ? structuredClone(rawRehost) : {};
+  const searchList = normalizeSearchList(parseCsvJson(data.used_search_list, []));
   const signinSites = parseMaybeJson(data.__auto_feed_keepalive_sites, []);
-  const seriesSites = normalizeSeriesSearchSites(parseCsvJson(data.__popcorn_series_search_sites, DEFAULT_SERIES_SEARCH_SITES), searchList);
-  const rawDarkSites = data.__popcorn_dark_background_sites;
-  const parsedDarkSites = rawDarkSites === undefined ? DEFAULT_DARK_BACKGROUND_SITES : parseCsvJson(rawDarkSites, []);
-  const darkSites = normalizeDarkBackgroundSites(parsedDarkSites, searchList);
-  const rawTmSites = data.__popcorn_tm_sites;
-  const parsedTmSites = parseCsvJson(rawTmSites, []);
-  const tmSites = normalizeTransmissionSites(parsedTmSites, searchList);
+  const seriesSites = normalizeSeriesSearchSites(parseCsvJson(data.__popcorn_series_search_sites, []), searchList);
+  const darkSites = normalizeDarkBackgroundSites(parseCsvJson(data.__popcorn_dark_background_sites, []), searchList);
+  const tmSites = normalizeTransmissionSites(parseCsvJson(data.__popcorn_tm_sites, []), searchList);
   const tmConfig = {
     enabled: Number(data.__popcorn_tm_enabled) === 1,
-    rpcLan: data.__popcorn_tm_rpc_lan || '',
-    rpcWan: data.__popcorn_tm_rpc_wan || '',
-    username: data.__popcorn_tm_username || '',
-    password: data.__popcorn_tm_password || '',
-    movieDir: data.__popcorn_tm_movie_dir || '',
-    tvDir: data.__popcorn_tm_tv_dir || ''
+    rpcLan: data.__popcorn_tm_rpc_lan == null ? '' : String(data.__popcorn_tm_rpc_lan),
+    rpcWan: data.__popcorn_tm_rpc_wan == null ? '' : String(data.__popcorn_tm_rpc_wan),
+    username: data.__popcorn_tm_username == null ? '' : String(data.__popcorn_tm_username),
+    password: data.__popcorn_tm_password == null ? '' : String(data.__popcorn_tm_password),
+    movieDir: data.__popcorn_tm_movie_dir == null ? '' : String(data.__popcorn_tm_movie_dir),
+    tvDir: data.__popcorn_tm_tv_dir == null ? '' : String(data.__popcorn_tm_tv_dir)
   };
-  return { usedSiteInfo, siteOrder, common, showSearch, extra, rehost, searchList, hidden, signinSites, seriesSites, darkSites, tmSites, tmConfig };
+  return { usedSiteInfo:cleanSiteInfo, siteOrder, common, showSearch, extra, rehost, searchList, hidden, signinSites:Array.isArray(signinSites)?signinSites:[], seriesSites, darkSites, tmSites, tmConfig };
 }
 
 function renderQuickSelected(st){
@@ -270,9 +236,9 @@ function renderTransmissionConfig(st){
 }
 
 function renderSignin(st){
-  $('keepalive_enabled').checked = !!num(current.__auto_feed_keepalive_enabled, 0);
-  $('keepalive_autoclose').checked = current.__auto_feed_keepalive_autoclose === undefined ? true : !!num(current.__auto_feed_keepalive_autoclose, 1);
-  $('keepalive_close_delay').value = Number(current.__auto_feed_keepalive_close_delay || 2);
+  $('keepalive_enabled').checked = Number(current.__auto_feed_keepalive_enabled) === 1;
+  $('keepalive_autoclose').checked = Number(current.__auto_feed_keepalive_autoclose) === 1;
+  $('keepalive_close_delay').value = current.__auto_feed_keepalive_close_delay == null ? '' : String(current.__auto_feed_keepalive_close_delay);
   const rows = (st.signinSites || []).map((x, i) => `
     <div class="signin-row" data-index="${i}" data-last-success-at="${esc(x.lastSuccessAt || '')}" data-last-success-date="${esc(x.lastSuccessDate || '')}" data-last-attempt-at="${esc(x.lastAttemptAt || '')}" data-last-status="${esc(x.lastStatus || '')}" data-last-error="${esc(x.lastError || '')}">
       <label><input type="checkbox" class="signin-enabled" ${x.enabled !== false ? 'checked':''}>启用</label>
@@ -290,12 +256,12 @@ function renderFromData(data){
   const st = defaultsState(current);
   if ($('used_tmdb_key')) $('used_tmdb_key').value = current.used_tmdb_key ?? '';
   if ($('used_ptp_img_key')) $('used_ptp_img_key').value = current.used_ptp_img_key ?? '';
-  $('if_uplver').checked = !!num(current.if_uplver, 1);
-  $('if_douban_jump').checked = !!num(current.if_douban_jump, 1);
-  $('if_imdb_jump').checked = !!num(current.if_imdb_jump, 1);
-  $('nhd_use_v6_url').checked = !!num(current.nhd_use_v6_url, 0);
-  setRadio('imdb2db', String(current.imdb2db_chosen ?? 0));
-  setRadio('ptgen', String(current.api_chosen ?? 3));
+  $('if_uplver').checked = Number(current.if_uplver) === 1;
+  $('if_douban_jump').checked = Number(current.if_douban_jump) === 1;
+  $('if_imdb_jump').checked = Number(current.if_imdb_jump) === 1;
+  $('nhd_use_v6_url').checked = Number(current.nhd_use_v6_url) === 1;
+  setRadio('imdb2db', current.imdb2db_chosen == null ? '' : String(current.imdb2db_chosen));
+  setRadio('ptgen', current.api_chosen == null ? '' : String(current.api_chosen));
 
   $('site_grid').innerHTML = st.siteOrder.filter(isForwardSettingSite).map(k=>`<label><input type="checkbox" class="support_site" data-site="${esc(k)}" ${st.usedSiteInfo[k]?.enable ? 'checked':''}><span>${esc(k)}</span></label>`).join('');
   renderQuickToggles(st);
@@ -312,26 +278,27 @@ function renderFromData(data){
 function setRadio(name, value){ const el=document.querySelector(`input[name="${name}"][value="${value}"]`); if(el) el.checked=true; }
 function getRadio(name, fallback){ return document.querySelector(`input[name="${name}"]:checked`)?.value ?? fallback; }
 
-async function loadQuickSearchLibrary(){
-  let base = [];
-  try { base = await fetch('../data/quick_search_library.json').then(r=>r.json()); } catch(e) { base = []; }
-  try { customQuickSearchLibrary = parseMaybeJson((await chrome.storage.local.get('__popcorn_custom_quick_search_library')).__popcorn_custom_quick_search_library, []); } catch(e) { customQuickSearchLibrary = []; }
+async function loadQuickSearchLibrary(data){
+  let base = data && Array.isArray(data.__popcorn_quick_search_library) ? data.__popcorn_quick_search_library : [];
+  customQuickSearchLibrary = parseMaybeJson(data && data.__popcorn_custom_quick_search_library, []);
+  if (!Array.isArray(customQuickSearchLibrary)) customQuickSearchLibrary = [];
   quickSearchLibrary = mergeQuickLibraries(base, customQuickSearchLibrary);
   const dl = $('quick_search_library');
   if (dl) dl.innerHTML = quickSearchLibrary.map(x=>`<option value="${esc(x.name)}">${esc(x.href)}</option>`).join('');
 }
-function selectedQuickSearch(){
-  const v = $('quick_search_pick')?.value?.trim();
-  if (!v) return null;
-  return quickSearchLibrary.find(x=>x.name.toLowerCase()===v.toLowerCase()) || quickSearchLibrary.find(x=>x.name.toLowerCase().includes(v.toLowerCase()));
+async function load(){
+  const data = await chrome.storage.local.get(null);
+  current = data || {};
+  await loadQuickSearchLibrary(current);
+  renderFromData(current);
+  setStatus('global_status','已加载当前设置（不会自动补默认值）');
 }
-async function load(){ await loadQuickSearchLibrary(); const data = await chrome.storage.local.get(null); renderFromData(data); const st = defaultsState(data); const normalizedSearch = stringifyCsv(st.searchList); const normalizedCommon = stringifyCsv(st.common); const normalizedSeries = stringifyCsv(st.seriesSites); const normalizedDark = stringifyCsv(st.darkSites); const normalizedTm = stringifyCsv(st.tmSites); if (data.used_search_list !== normalizedSearch || data.used_common_sites !== normalizedCommon || data.__popcorn_series_search_sites !== normalizedSeries || data.__popcorn_dark_background_sites !== normalizedDark || data.__popcorn_tm_sites !== normalizedTm) { await chrome.storage.local.set({ used_search_list: normalizedSearch, used_common_sites: normalizedCommon, __popcorn_series_search_sites: normalizedSeries, __popcorn_dark_background_sites: normalizedDark, __popcorn_tm_sites: normalizedTm }); current = { ...data, used_search_list: normalizedSearch, used_common_sites: normalizedCommon, __popcorn_series_search_sites: normalizedSeries, __popcorn_dark_background_sites: normalizedDark, __popcorn_tm_sites: normalizedTm }; renderFromData(current); } setStatus('global_status','已加载当前设置'); }
 function collect(){
   const st = defaultsState(current);
   const data = {...current};
   const siteOrder = st.siteOrder;
   const usedSiteInfo = st.usedSiteInfo;
-  $$('.support_site').forEach(cb => { const k=cb.dataset.site; usedSiteInfo[k] = usedSiteInfo[k] || structuredClone(D.default_site_info[k]); usedSiteInfo[k].enable = cb.checked ? 1 : 0; });
+  $$('.support_site').forEach(cb => { const k=cb.dataset.site; usedSiteInfo[k] = usedSiteInfo[k] || { url:'', enable:0 }; usedSiteInfo[k].enable = cb.checked ? 1 : 0; });
   const quickLines = $('used_search_list').value.split('\n').map(s=>s.trim()).filter(Boolean);
   const common = Array.from(new Set(quickLines.map(quickSiteKeyFromHtml).filter(Boolean)));
   const showSearch = {...st.showSearch};
@@ -363,8 +330,8 @@ function collect(){
   data.used_search_list = stringifyCsv($('used_search_list').value.split('\n').map(s=>s.trim()).filter(Boolean));
   data.used_tmdb_key = $('used_tmdb_key') ? $('used_tmdb_key').value.trim() : '';
   data.used_ptp_img_key = $('used_ptp_img_key') ? $('used_ptp_img_key').value.trim() : '';
-  data.imdb2db_chosen = getRadio('imdb2db', '0');
-  data.api_chosen = '3';
+  data.imdb2db_chosen = getRadio('imdb2db', current.imdb2db_chosen == null ? '' : String(current.imdb2db_chosen));
+  data.api_chosen = current.api_chosen == null ? '' : current.api_chosen;
   data.if_uplver = $('if_uplver').checked ? 1 : 0;
   data.if_douban_jump = $('if_douban_jump').checked ? 1 : 0;
   data.if_imdb_jump = $('if_imdb_jump').checked ? 1 : 0;
@@ -372,7 +339,7 @@ function collect(){
   data.used_rehost_img_info = JSON.stringify(rehost);
   data.__auto_feed_keepalive_enabled = $('keepalive_enabled').checked ? 1 : 0;
   data.__auto_feed_keepalive_autoclose = $('keepalive_autoclose').checked ? 1 : 0;
-  data.__auto_feed_keepalive_close_delay = Math.max(1, Math.min(30, Number($('keepalive_close_delay').value || 2)));
+  { const n = Number($('keepalive_close_delay').value); data.__auto_feed_keepalive_close_delay = Number.isFinite(n) ? Math.max(0, Math.min(30, n)) : 0; }
   data.__auto_feed_keepalive_sites = signinSites;
   data.__popcorn_series_search_sites = stringifyCsv(seriesSites);
   data.__popcorn_dark_background_sites = stringifyCsv(darkSites);
@@ -427,7 +394,6 @@ $('quick_selected_list').addEventListener('click',(e)=>{
   setStatus('global_status','已从快速搜索列表移除，记得保存全部设置');
 });
 $('save_json').onclick=async()=>{ try{ const data=JSON.parse($('json').value); await chrome.storage.local.clear(); await chrome.storage.local.set(data); renderFromData(data); setStatus('json_status','已保存 JSON，刷新目标页面后生效'); }catch(e){ setStatus('json_status','JSON 格式错误：'+e.message,true); } };
-$('reset').onclick=async()=>{ if(!confirm('确定清空当前设置并恢复扩展内置备份？')) return; chrome.runtime.sendMessage({type:'reset_storage'}, async(resp)=>{ if(resp&&resp.ok){ await load(); setStatus('json_status','已恢复内置备份'); } else setStatus('json_status','恢复失败：'+(resp&&resp.error),true); }); };
 $('export').onclick=()=>{ const blob=new Blob([$('json').value],{type:'application/json'}); const url=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download='popcorn.storage.export.json'; a.click(); URL.revokeObjectURL(url); };
 $('import').onchange=async(e)=>{ const f=e.target.files[0]; if(!f)return; $('json').value=await f.text(); setStatus('json_status','已读取导入文件，点击“保存 JSON”后生效'); };
 
@@ -492,7 +458,8 @@ if ($('add_manual_quick_search')) $('add_manual_quick_search').onclick = async (
   const custom = mergeQuickLibraries(customQuickSearchLibrary, [{ name, href, html }]);
   customQuickSearchLibrary = custom;
   await chrome.storage.local.set({ __popcorn_custom_quick_search_library: customQuickSearchLibrary });
-  await loadQuickSearchLibrary();
+  current = { ...current, __popcorn_custom_quick_search_library: customQuickSearchLibrary };
+  await loadQuickSearchLibrary(current);
   $('manual_quick_name').value = ''; $('manual_quick_url').value = '';
   const data=collect(); current=data; const st=defaultsState(data); renderQuickSelected(st); renderSeriesSearchSites(st); renderDarkBackgroundSites(st); renderTransmissionSites(st);
   setStatus('global_status', '已添加“' + name + '”到当前快捷搜索和自定义库，记得保存全部设置');

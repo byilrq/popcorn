@@ -2,30 +2,28 @@
 // extension service worker via chrome.scripting.executeScript({ world: 'MAIN' }).
 (() => {
 
-const AUTO_FEED_ALLOWED_HOSTS = [
-  "audiences.me",
-  "backup.landof.tv",
-  "beyond-hd.me",
-  "blutopia.cc",
-  "broadcasthe.net",
-  "douban.com",
-  "greatposterwall.com",
-  "imdb.com",
-  "kp.m-team.cc",
-  "m.douban.com",
-  "movie.douban.com",
-  "orpheus.network",
-  "ourbits.club",
-  "passthepopcorn.me",
-  "ptchdbits.co",
-  "redacted.ch",
-  "redacted.sh",
-  "search.douban.com",
-  "totheglory.im",
-  "www.douban.com",
-  "www.imdb.com",
-  "zp.m-team.io"
-];
+let AUTO_FEED_ALLOWED_HOSTS = [];
+let AUTO_FEED_ALLOWED_HOSTS_READY = false;
+
+function parseAllowedHostsValue(value) {
+  if (Array.isArray(value)) return value.map(x=>String(x||'').trim().toLowerCase()).filter(Boolean);
+  if (typeof value === 'string') {
+    try { const parsed = JSON.parse(value); if (Array.isArray(parsed)) return parseAllowedHostsValue(parsed); } catch (e) {}
+    return value.split(',').map(x=>x.trim().toLowerCase()).filter(Boolean);
+  }
+  return [];
+}
+
+async function loadAutoFeedAllowedHosts() {
+  if (AUTO_FEED_ALLOWED_HOSTS_READY) return;
+  AUTO_FEED_ALLOWED_HOSTS_READY = true;
+  try {
+    const all = await chrome.storage.local.get(null);
+    AUTO_FEED_ALLOWED_HOSTS = parseAllowedHostsValue(all && all.__popcorn_allowed_hosts);
+  } catch (e) {
+    AUTO_FEED_ALLOWED_HOSTS = [];
+  }
+}
 
 function autoFeedHostAllowed(url) {
   try {
@@ -87,6 +85,7 @@ function autoFeedHostAllowed(url) {
 
   async function shouldSkipAutoFeedInjectionAsync() {
     try {
+      await loadAutoFeedAllowedHosts();
       const href = String(location.href || '');
       if (!(await autoFeedHostAllowedDynamic(href))) return true;
       if (/(?:\.(?:rss|atom|xml)(?:[?#]|$)|\/feed(?:\.(?:rss|xml|atom))?(?:[?#]|$))/i.test(href)) return true;
